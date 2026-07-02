@@ -1,0 +1,39 @@
+# Catalogue d'actions du Pont hôte — la liste blanche fermée (ADR 0008).
+#
+# Copiez ce fichier en catalog.toml puis décrivez VOS actions ; l'assistant ne
+# pourra jamais rien lancer d'autre. Chaque action est un argv explicite (jamais
+# un shell), déclinée par plateforme : `windows` et/ou `linux`. Absente d'une
+# plateforme, l'action y est simplement indisponible.
+#
+# La `description` est lue à l'utilisateur : rédigez-la en langage naturel.
+
+[actions.navigateur]
+description = "Ouvrir le navigateur web"
+windows = ["cmd", "/c", "start", "https://start.duckduckgo.com"]
+linux = ["xdg-open", "https://start.duckduckgo.com"]
+
+[actions.musique]
+description = "Mettre la musique en pause ou la relancer"
+# Windows : bascule play/pause via l'API média (PowerShell + touche multimédia).
+windows = [
+    "powershell",
+    "-NoProfile",
+    "-Command",
+    "(New-Object -ComObject WScript.Shell).SendKeys([char]179)",
+]
+linux = ["playerctl", "play-pause"]
+
+[actions.volume]
+description = "Baisser le volume"
+windows = [
+    "powershell",
+    "-NoProfile",
+    "-Command",
+    "(New-Object -ComObject WScript.Shell).SendKeys([char]174)",
+]
+linux = ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "-10%"]
+
+[actions.verrouiller]
+description = "Verrouiller la session"
+windows = ["rundll32.exe", "user32.dll,LockWorkStation"]
+linux = ["loginctl", "lock-session"]

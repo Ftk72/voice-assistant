@@ -43,6 +43,18 @@ Second composant sur mesure : mémoire en graphe (Graphiti/Neo4j, ADR 0005) alim
 - **Déposer un document** : glisser un `.md` ou `.pdf` dans [documents/](documents/) — ingéré automatiquement (~10 s), relié aux souvenirs par les entités communes (ADR 0006).
 - **Visualiser le graphe** : mini-page du Memory Forge sur http://127.0.0.1:8200/viz (recherche d'entité, voisinage, filtres provenance/validité) ; Neo4j Browser sur http://127.0.0.1:7474 pour le Cypher brut.
 
+## Monde extérieur (World Forge)
+
+Accès sourcé au web (phase 6, ADR 0007 — souveraineté, pas isolement) : le LLM reste local, seules des requêtes anonymes sortent. Outils MCP `web_search` (réponse sourcée via SearXNG auto-hébergé), `weather` (Open-Meteo), `briefing` (flux RSS), `read_page`. Détails : [world-forge/README.md](world-forge/README.md).
+
+## Quotidien et agenda (Time Forge)
+
+Le temps de l'assistant (phases 3+5, ADR 0008) : agenda local (SQLite souverain), rappels, minuteurs précis à la seconde, et l'annonceur — le canal de parole spontanée. Outils MCP pour créer/lister/supprimer événements et minuteurs. À l'échéance, l'annonce est synthétisée par le Voice Forge puis jouée sur les enceintes via le Pont hôte. Détails : [time-forge/README.md](time-forge/README.md).
+
+## Pont hôte (host-bridge)
+
+Le seul composant **hors Docker** (ADR 0008) : le pied de l'assistant sur la machine hôte, sans intelligence. Il joue les annonces reçues sur les enceintes et exécute les actions de la liste blanche `catalog.toml` — jamais une commande arbitraire. Les conteneurs ne peuvent ni parler sur les enceintes ni agir sur le bureau ; le Pont, lui, tourne sur l'hôte et est joignable via `http://host.docker.internal:8500`. Lancement : `uv run python -m app` dans [host-bridge/](host-bridge/) (voir son README).
+
 ## Éthique et sécurité
 
 - Voix clonées de personnes réelles : usage strictement personnel, aucune diffusion des sorties audio.
@@ -59,4 +71,7 @@ Voir [voice-forge/README.md](voice-forge/README.md) et [memory-forge/README.md](
 2. Valider la config Audio dans OpenWebUI, créer les personas, installer la Filter mémoire et brancher le serveur MCP `http://memory:8200/mcp` ([docs/OPENWEBUI.md](docs/OPENWEBUI.md)).
 3. **Mesurer la latence** fin de parole → début de réponse (cible ≤ 2 s, docs/ACCEPTANCE.md) et le surcoût d'injection mémoire (≤ 300 ms, docs/ACCEPTANCE-MEMOIRE.md).
 4. Vérifier les API réelles jamais exécutées : `chatterbox-tts` (`_RealChatterboxEngine`) et `graphiti-core` (`GraphitiMemory`, `uv sync --extra graphiti`).
+5. **Monde extérieur** : puller l'image `searxng/searxng` et générer un `secret_key` dans `searxng/settings.yml` ; valider la passerelle réelle `RealWorld` (SearXNG/Open-Meteo/flux RSS).
+6. **Quotidien + Pont hôte** : lancer le Pont hôte sur l'hôte Windows (`HOST_BRIDGE_HOST=0.0.0.0` + pare-feu limité au réseau Docker), écrire `catalog.toml` depuis `host-bridge/catalog.example.toml`, et valider la chaîne d'annonce réelle `HostBridgeAnnouncer` (Voice Forge → Pont hôte → enceintes).
+7. Configurer les serveurs MCP additionnels dans OpenWebUI : `http://world:8300/mcp`, `http://time:8400/mcp`, `http://host.docker.internal:8500/mcp` (voir [docs/ACCEPTANCE-CAPACITES.md](docs/ACCEPTANCE-CAPACITES.md)).
 # voice-assistant

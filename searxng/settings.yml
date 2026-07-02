@@ -1,0 +1,14 @@
+# Configuration minimale de SearXNG (méta-moteur auto-hébergé, ADR 0007).
+# Au premier lancement : remplacez secret_key par une valeur aléatoire.
+
+use_default_settings: true
+
+server:
+  secret_key: "changez-moi-au-premier-lancement"
+  limiter: false
+
+search:
+  # Le format json est indispensable au World Forge (il interroge l'API, pas le HTML).
+  formats:
+    - html
+    - json

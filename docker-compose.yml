@@ -1,4 +1,5 @@
-# Assistant vocal local — 4 services (voir docs/adr/).
+# Assistant vocal local — 10 services (dont 4 sur mesure : voice-forge, memory,
+# world, time ; le Pont hôte tourne hors Docker — ADR 0008). Voir docs/adr/.
 # Seul OpenWebUI est publié ; tous les ports hôte sont liés à 127.0.0.1.
 # Prérequis : modèles téléchargés via scripts/download-models.sh (voir README).
 
@@ -176,7 +177,75 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # ---- Monde extérieur (phase 6, ADR 0007) ----
+
+  searxng:
+    # Méta-moteur auto-hébergé — image à puller au jour de bonne connexion.
+    image: searxng/searxng:latest
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    ports:
+      - "127.0.0.1:8080:8080"   # debug uniquement
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  world:
+    build: ./world-forge
+    environment:
+      WORLD_FORGE_HOST: 0.0.0.0          # réseau Docker interne uniquement
+      WORLD_FORGE_GATEWAY: real
+      WORLD_FORGE_SEARXNG_URL: http://searxng:8080
+      WORLD_FORGE_FEEDS: ""              # flux RSS du briefing, séparés par des virgules
+    ports:
+      - "127.0.0.1:8300:8300"
+    depends_on:
+      searxng:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8300/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  # ---- Quotidien + agenda (phases 3+5, ADR 0008) ----
+
+  time:
+    build: ./time-forge
+    environment:
+      TIME_FORGE_HOST: 0.0.0.0           # réseau Docker interne uniquement
+      TIME_FORGE_STORE: sqlite
+      TIME_FORGE_SQLITE_PATH: /data/agenda.db
+      TIME_FORGE_ANNOUNCER: hostbridge
+      TIME_FORGE_VOICE_FORGE_URL: http://voice-forge:8100
+      TIME_FORGE_HOST_BRIDGE_URL: http://host.docker.internal:8500
+      TZ: Europe/Paris                   # échéances en heure locale
+    volumes:
+      - time-forge-data:/data
+    extra_hosts:
+      # joint le Pont hôte, qui tourne hors Docker — ADR 0008
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:8400:8400"
+    depends_on:
+      voice-forge:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8400/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
 volumes:
   open-webui-data:
   voice-forge-cache:
   neo4j-data:
+  time-forge-data:
