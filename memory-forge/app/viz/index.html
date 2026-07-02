@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Memory Forge — visualisation du graphe</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1d2026; --line: #33373f;
+    --text: #e8e9eb; --muted: #9aa0a8;
+    --souvenir: #6ea8fe; --document: #74c69d; --obsolete: #6c757d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  header { display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; align-items: center;
+           padding: .75rem 1rem; background: var(--panel); border-bottom: 1px solid var(--line); }
+  h1 { font-size: 1rem; margin: 0; font-weight: 600; }
+  input, select, button { font: inherit; background: var(--bg); color: var(--text);
+                          border: 1px solid var(--line); border-radius: 6px; padding: .3rem .6rem; }
+  button { cursor: pointer; } button:hover { border-color: var(--muted); }
+  fieldset { border: 0; padding: 0; margin: 0; display: flex; gap: .75rem; align-items: center; }
+  label { color: var(--muted); display: flex; gap: .3rem; align-items: center; cursor: pointer; }
+  main { display: flex; height: calc(100vh - 57px); }
+  #canvas { flex: 1; min-width: 0; }
+  aside { width: 340px; border-left: 1px solid var(--line); background: var(--panel);
+          padding: 1rem; overflow-y: auto; }
+  aside h2 { font-size: .85rem; text-transform: uppercase; letter-spacing: .04em;
+             color: var(--muted); margin: 0 0 .5rem; }
+  .fact { border: 1px solid var(--line); border-radius: 8px; padding: .5rem .65rem; margin-bottom: .5rem; }
+  .fact.obsolete { opacity: .55; }
+  .fact .meta { color: var(--muted); font-size: .8rem; margin-top: .25rem; }
+  .badge { display: inline-block; padding: 0 .45rem; border-radius: 999px; font-size: .75rem; }
+  .badge.conversation { background: color-mix(in srgb, var(--souvenir) 25%, transparent); color: var(--souvenir); }
+  .badge.document { background: color-mix(in srgb, var(--document) 25%, transparent); color: var(--document); }
+  #status { color: var(--muted); }
+  circle.node { fill: var(--panel); stroke: var(--muted); stroke-width: 1.5; cursor: pointer; }
+  circle.node.center { stroke: var(--text); stroke-width: 2.5; }
+  text.label { fill: var(--text); font-size: 12px; pointer-events: none; }
+  line.edge { stroke-width: 1.5; }
+  line.edge.conversation { stroke: var(--souvenir); }
+  line.edge.document { stroke: var(--document); }
+  line.edge.obsolete { stroke: var(--obsolete); stroke-dasharray: 5 4; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Memory Forge — graphe</h1>
+  <form id="search-form">
+    <input id="entity" placeholder="Recherche d'entité (ex. Léa)" size="24" autofocus>
+    <select id="depth" title="Profondeur">
+      <option value="1">1 saut</option><option value="2" selected>2 sauts</option><option value="3">3 sauts</option>
+    </select>
+    <button>Explorer</button>
+  </form>
+  <fieldset title="Filtres par provenance">
+    <label><input type="checkbox" id="f-conversation" checked> souvenirs</label>
+    <label><input type="checkbox" id="f-document" checked> documents</label>
+  </fieldset>
+  <fieldset title="Filtres par validité">
+    <label><input type="checkbox" id="f-actifs" checked> actifs</label>
+    <label><input type="checkbox" id="f-obsoletes" checked> obsolètes</label>
+  </fieldset>
+  <span id="status">Cliquer un nœud pour étendre le voisinage de proche en proche.</span>
+</header>
+<main>
+  <svg id="canvas"></svg>
+  <aside>
+    <h2 id="panel-title">Faits</h2>
+    <div id="facts"></div>
+  </aside>
+</main>
+<script>
+"use strict";
+const svg = document.getElementById("canvas");
+const state = { nodes: new Map(), edges: [], center: null, selected: null };
+
+function edgeKey(e) { return [e.source, e.target, e.text].join("|"); }
+
+async function explore(entity, { merge = false } = {}) {
+  const depth = document.getElementById("depth").value;
+  const res = await fetch(`/graph?entity=${encodeURIComponent(entity)}&depth=${depth}`);
+  if (!res.ok) { setStatus(`Erreur ${res.status}`); return; }
+  const data = await res.json();
+  if (!merge) { state.nodes.clear(); state.edges = []; state.center = data.center; }
+  const w = svg.clientWidth, h = svg.clientHeight;
+  for (const name of data.nodes) {
+    if (!state.nodes.has(name)) {
+      state.nodes.set(name, { name, x: w / 2 + (Math.random() - .5) * 200,
+                                    y: h / 2 + (Math.random() - .5) * 200 });
+    }
+  }
+  const known = new Set(state.edges.map(edgeKey));
+  for (const e of data.edges) if (!known.has(edgeKey(e))) state.edges.push(e);
+  setStatus(`${state.nodes.size} entités, ${state.edges.length} faits.`);
+  simulate(); render(); showFacts(data.center);
+}
+
+// Mini force-layout maison (répulsion + ressorts) — pas de lib externe (100 % local).
+function simulate() {
+  const nodes = [...state.nodes.values()];
+  const w = svg.clientWidth, h = svg.clientHeight;
+  for (let step = 0; step < 250; step++) {
+    for (const a of nodes) { a.fx = 0; a.fy = 0; }
+    for (const a of nodes) for (const b of nodes) {
+      if (a === b) continue;
+      let dx = a.x - b.x, dy = a.y - b.y;
+      const d2 = Math.max(dx * dx + dy * dy, 100);
+      const f = 12000 / d2;
+      a.fx += dx / Math.sqrt(d2) * f; a.fy += dy / Math.sqrt(d2) * f;
+    }
+    for (const e of state.edges) {
+      const a = state.nodes.get(e.source), b = state.nodes.get(e.target);
+      if (!a || !b || a === b) continue;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.max(Math.hypot(dx, dy), 1), f = (d - 140) * 0.02;
+      a.fx += dx / d * f; a.fy += dy / d * f;
+      b.fx -= dx / d * f; b.fy -= dy / d * f;
+    }
+    for (const n of nodes) {
+      n.x = Math.min(Math.max(n.x + n.fx, 30), w - 30);
+      n.y = Math.min(Math.max(n.y + n.fy, 30), h - 30);
+    }
+  }
+}
+
+function visible(e) {
+  const prov = document.getElementById(`f-${e.provenance.source}`).checked;
+  const actif = e.invalid_at === null;
+  const validite = actif ? document.getElementById("f-actifs").checked
+                         : document.getElementById("f-obsoletes").checked;
+  return prov && validite;
+}
+
+function el(tag, attrs) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  return node;
+}
+
+function render() {
+  svg.replaceChildren();
+  const shown = state.edges.filter(visible);
+  const linked = new Set(shown.flatMap(e => [e.source, e.target]));
+  for (const e of shown) {
+    const a = state.nodes.get(e.source), b = state.nodes.get(e.target);
+    if (!a || !b || a === b) continue;
+    const cls = "edge " + e.provenance.source + (e.invalid_at !== null ? " obsolete" : "");
+    const line = el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, class: cls });
+    line.append(Object.assign(document.createElementNS(svg.namespaceURI, "title"),
+                              { textContent: e.text }));
+    svg.append(line);
+  }
+  for (const n of state.nodes.values()) {
+    if (!linked.has(n.name) && n.name !== state.center) continue;
+    const cls = "node" + (n.name === state.center ? " center" : "");
+    const dot = el("circle", { cx: n.x, cy: n.y, r: 9, class: cls });
+    dot.addEventListener("click", () => explore(n.name, { merge: true }));
+    dot.addEventListener("mouseenter", () => showFacts(n.name));
+    svg.append(dot, Object.assign(el("text", { x: n.x + 12, y: n.y + 4, class: "label" }),
+                                  { textContent: n.name }));
+  }
+}
+
+function showFacts(entity) {
+  state.selected = entity;
+  document.getElementById("panel-title").textContent = `Faits — ${entity}`;
+  const box = document.getElementById("facts");
+  box.replaceChildren();
+  const mine = state.edges.filter(e => (e.source === entity || e.target === entity) && visible(e));
+  for (const e of mine) {
+    const div = document.createElement("div");
+    div.className = "fact" + (e.invalid_at !== null ? " obsolete" : "");
+    const dates = [
+      e.valid_at ? `depuis le ${new Date(e.valid_at).toLocaleDateString("fr-FR")}` : null,
+      e.invalid_at ? `obsolète depuis le ${new Date(e.invalid_at).toLocaleDateString("fr-FR")}` : null,
+    ].filter(Boolean).join(" · ");
+    div.innerHTML = `<div></div>
+      <div class="meta"><span class="badge ${e.provenance.source}"></span> <span></span></div>`;
+    div.children[0].textContent = e.text;
+    div.querySelector(".badge").textContent =
+      e.provenance.source === "conversation" ? "souvenir" : "document";
+    div.querySelector(".meta span:last-child").textContent =
+      [e.provenance.name, dates].filter(Boolean).join(" · ");
+    box.append(div);
+  }
+  if (!mine.length) box.textContent = "Aucun fait visible avec les filtres actuels.";
+}
+
+document.getElementById("search-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const entity = document.getElementById("entity").value.trim();
+  if (entity) explore(entity);
+});
+for (const id of ["f-conversation", "f-document", "f-actifs", "f-obsoletes"]) {
+  document.getElementById(id).addEventListener("change", () => {
+    render();
+    if (state.selected) showFacts(state.selected);
+  });
+}
+</script>
+</body>
+</html>

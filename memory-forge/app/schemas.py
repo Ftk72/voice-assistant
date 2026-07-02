@@ -30,3 +30,23 @@ class Fact(BaseModel):
 
 class SearchResponse(BaseModel):
     facts: list[Fact]
+
+
+class GraphEdge(BaseModel):
+    """Un fait vu comme arête entre deux entités (source == target : fait à une
+    seule entité, affiché sur le nœud)."""
+
+    source: str
+    target: str
+    text: str
+    provenance: Provenance
+    valid_at: datetime | None = None
+    invalid_at: datetime | None = None
+
+
+class GraphNeighborhood(BaseModel):
+    """Voisinage navigable d'une entité — le contrat de la visualisation (phase 5)."""
+
+    center: str
+    nodes: list[str]
+    edges: list[GraphEdge]

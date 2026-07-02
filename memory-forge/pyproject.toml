@@ -8,6 +8,7 @@ dependencies = [
     "mcp>=1.28.1",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
+    "pypdf>=6.14.2",
     "uvicorn>=0.32",
 ]
 

@@ -2,7 +2,14 @@ import re
 from datetime import UTC, datetime
 
 from app.graph.base import GraphMemory
-from app.schemas import EpisodeIn, Fact, Provenance
+from app.schemas import EpisodeIn, Fact, GraphEdge, GraphNeighborhood, Provenance
+
+# Mots capitalisés en début de phrase à ne pas prendre pour des entités.
+_STOPWORDS = {
+    "le", "la", "les", "un", "une", "de", "du", "des", "il", "elle", "on",
+    "au", "aux", "ce", "cette", "ces", "et", "mais", "ou", "dans", "pour",
+    "sur", "avec", "sans", "chez",
+}
 
 
 class InMemoryGraph(GraphMemory):
@@ -34,3 +41,49 @@ class InMemoryGraph(GraphMemory):
         before = len(self._facts)
         self._facts = [f for f in self._facts if entity.lower() not in f.text.lower()]
         return before - len(self._facts)
+
+    async def neighborhood(self, entity: str, depth: int = 1) -> GraphNeighborhood:
+        """Entités = mots capitalisés (naïf, assumé pour le factice) ; un fait relie
+        entre elles toutes les entités de sa phrase."""
+        nodes = {entity}
+        edges: list[GraphEdge] = []
+        frontier = {entity.lower()}
+        visited: set[str] = set()
+        seen_facts: set[int] = set()
+        for _ in range(depth):
+            visited |= frontier
+            reached: set[str] = set()
+            for fact in self._facts:
+                if id(fact) in seen_facts or not any(
+                    name in fact.text.lower() for name in frontier
+                ):
+                    continue
+                seen_facts.add(id(fact))
+                entities = _entities(fact.text) or [entity]
+                nodes.update(entities)
+                reached.update(e.lower() for e in entities)
+                source = entities[0]
+                for target in entities[1:] or [source]:
+                    edges.append(
+                        GraphEdge(
+                            source=source,
+                            target=target,
+                            text=fact.text,
+                            provenance=fact.provenance,
+                            valid_at=fact.valid_at,
+                            invalid_at=fact.invalid_at,
+                        )
+                    )
+            frontier = reached - visited
+            if not frontier:
+                break
+        return GraphNeighborhood(center=entity, nodes=sorted(nodes), edges=edges)
+
+
+def _entities(text: str) -> list[str]:
+    words = re.findall(r"\b[A-ZÀ-Ý][\wà-ÿ-]*", text)
+    seen: dict[str, str] = {}
+    for word in words:
+        if word.lower() not in _STOPWORDS:
+            seen.setdefault(word.lower(), word)
+    return list(seen.values())

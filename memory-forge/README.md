@@ -9,13 +9,15 @@ uv sync
 uv run python -m app        # http://127.0.0.1:8200 — backend factice
 ```
 
-Configuration par variables d'environnement (préfixe `MEMORY_FORGE_`) : `BACKEND` (`fake` par défaut, `graphiti` en production — nécessite `uv sync --extra graphiti`), `NEO4J_URI`/`NEO4J_USER`/`NEO4J_PASSWORD`, `LLM_BASE_URL` (extraction différée sur le Qwen), `EMBEDDER_BASE_URL` (bge-m3), `HOST` (défaut `127.0.0.1`), `PORT` (défaut `8200`).
+Configuration par variables d'environnement (préfixe `MEMORY_FORGE_`) : `BACKEND` (`fake` par défaut, `graphiti` en production — nécessite `uv sync --extra graphiti`), `NEO4J_URI`/`NEO4J_USER`/`NEO4J_PASSWORD`, `LLM_BASE_URL` (extraction différée sur le Qwen), `EMBEDDER_BASE_URL` (bge-m3), `DOCUMENTS_DIR` (ingestion documentaire, désactivée si absent), `DOCUMENTS_POLL_SECONDS` (défaut `10`), `HOST` (défaut `127.0.0.1`), `PORT` (défaut `8200`).
 
 ## API (phase 1)
 
 - `POST /episodes` `{content, source: conversation|document, name}` → **202** immédiat, extraction en file différée (jamais pendant une conversation vocale).
 - `GET /search?q=…` → `{facts: [{text, provenance, valid_at, invalid_at}]}` — consommé par la Filter OpenWebUI (injection).
 - `DELETE /facts?entity=…` → oubli réel (suppression, pas invalidation).
+- `GET /graph?entity=…&depth=1..3` → voisinage navigable `{center, nodes, edges}` — consommé par la page `/viz`.
+- `GET /viz` — mini-page de visualisation du graphe.
 - `GET /health` — healthcheck Docker.
 
 ## Architecture
@@ -25,13 +27,19 @@ Configuration par variables d'environnement (préfixe `MEMORY_FORGE_`) : `BACKEN
 - `InMemoryGraph` — factice (une phrase = un fait, recherche par mots) : tests et dev.
 - `GraphitiMemory` — adaptateur réel. ⚠️ **Jamais exécuté** (écrit hors connexion) : à valider au premier lancement avec `uv sync --extra graphiti` + Neo4j.
 
-## À venir (phases 2-5 du plan validé)
+## Ingestion documentaire (phase 4, ADR 0006)
 
-Filter OpenWebUI (injection/capture) · endpoint MCP recall/forget + persona off-record · ingestion `documents/` (markdown + PDF) · mini-page de visualisation navigable (Neo4j Browser en attendant : http://127.0.0.1:7474).
+Déposer un `.md` ou un `.pdf` dans `../documents/` (monté dans le conteneur) : le watcher (polling mtime, ~10 s) le découpe — markdown par sections, PDF par page — et met les épisodes dans la même file d'extraction différée que les conversations. État du watcher : `documents/.memory-forge-state.json` (le supprimer force une ré-ingestion complète). Fichier modifié → ré-ingestion naïve, les contradictions reviennent au moteur du graphe.
+
+## Visualisation (phase 5)
+
+http://127.0.0.1:8200/viz — recherche d'entité, extension du voisinage au clic (profondeur 1-3), filtres provenance (souvenir/document) et validité (actifs/obsolètes, arêtes pointillées), panneau des faits datés avec provenance. Page autonome (HTML/JS vanilla servie par l'app, zéro CDN — contrainte 100 % local). Neo4j Browser reste disponible pour l'exploration Cypher brute : http://127.0.0.1:7474.
+
+⚠️ Conçue sur le backend factice : le réglage fin (layout, seuils) se fera sur graphe Graphiti peuplé, comme convenu au handoff 0003.
 
 ## Tests
 
 ```bash
-uv run pytest    # 7 tests, sans réseau ni GPU
+uv run pytest    # sans réseau ni GPU
 uv run ruff check .
 ```

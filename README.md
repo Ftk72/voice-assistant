@@ -36,20 +36,27 @@ Décisions techniques : [docs/adr/](docs/adr/) · Glossaire : [CONTEXT.md](CONTE
 - **Casque** : Settings → Audio → activer *Allow Voice Interruption in Call*.
 - **Haut-parleurs** : désactiver ce réglage (sinon l'assistant s'entend et s'interrompt).
 
+## Mémoire persistante (Memory Forge)
+
+Second composant sur mesure : mémoire en graphe (Graphiti/Neo4j, ADR 0005) alimentée par les conversations (Filter OpenWebUI) et par les documents. Recall/oubli via MCP. Détails : [memory-forge/README.md](memory-forge/README.md), critères : [docs/ACCEPTANCE-MEMOIRE.md](docs/ACCEPTANCE-MEMOIRE.md).
+
+- **Déposer un document** : glisser un `.md` ou `.pdf` dans [documents/](documents/) — ingéré automatiquement (~10 s), relié aux souvenirs par les entités communes (ADR 0006).
+- **Visualiser le graphe** : mini-page du Memory Forge sur http://127.0.0.1:8200/viz (recherche d'entité, voisinage, filtres provenance/validité) ; Neo4j Browser sur http://127.0.0.1:7474 pour le Cypher brut.
+
 ## Éthique et sécurité
 
 - Voix clonées de personnes réelles : usage strictement personnel, aucune diffusion des sorties audio.
 - Seul OpenWebUI est publié ; LLM, STT et Voice Forge sont liés à `127.0.0.1`.
 - Aucun appel réseau sortant à l'exécution (hors téléchargement initial).
 
-## Développement (Voice Forge)
+## Développement
 
-Voir [voice-forge/README.md](voice-forge/README.md) — `uv run pytest` (22 tests, sans GPU grâce au provider factice).
+Voir [voice-forge/README.md](voice-forge/README.md) et [memory-forge/README.md](memory-forge/README.md) — `uv run pytest` dans chaque dossier (sans GPU ni Neo4j grâce aux backends factices).
 
 ## Reste à faire (jour de bonne connexion)
 
-1. `./scripts/download-models.sh` (vérifier les dépôts HF) puis `docker compose up -d --build`.
-2. Valider la config Audio dans OpenWebUI et créer les personas.
-3. **Mesurer la latence** fin de parole → début de réponse (cible ≤ 2 s, docs/ACCEPTANCE.md) et ajuster (`--n-cpu-moe`, contexte, streaming TTS).
-4. Vérifier l'API réelle de `chatterbox-tts` (l'adaptateur `_RealChatterboxEngine` est écrit d'après la doc, jamais exécuté).
+1. `./scripts/download-models.sh` (vérifier les dépôts HF, dont bge-m3) puis `docker compose up -d --build`.
+2. Valider la config Audio dans OpenWebUI, créer les personas, installer la Filter mémoire et brancher le serveur MCP `http://memory:8200/mcp` ([docs/OPENWEBUI.md](docs/OPENWEBUI.md)).
+3. **Mesurer la latence** fin de parole → début de réponse (cible ≤ 2 s, docs/ACCEPTANCE.md) et le surcoût d'injection mémoire (≤ 300 ms, docs/ACCEPTANCE-MEMOIRE.md).
+4. Vérifier les API réelles jamais exécutées : `chatterbox-tts` (`_RealChatterboxEngine`) et `graphiti-core` (`GraphitiMemory`, `uv sync --extra graphiti`).
 # voice-assistant

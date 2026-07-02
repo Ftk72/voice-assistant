@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[co]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Poids des modèles (~27 Go, téléchargés par scripts/download-models.sh)
+models/
+
+# Contenu utilisateur (les README restent versionnés)
+documents/*
+!documents/README.md
+voices/*
+!voices/.gitkeep
+
+# État du watcher documentaire (ADR 0006)
+.memory-forge-state.json

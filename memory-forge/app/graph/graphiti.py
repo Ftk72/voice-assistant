@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from app.config import Settings
 from app.graph.base import GraphMemory
-from app.schemas import EpisodeIn, Fact, Provenance
+from app.schemas import EpisodeIn, Fact, GraphEdge, GraphNeighborhood, Provenance
 
 
 class GraphitiMemory(GraphMemory):
@@ -62,6 +62,56 @@ class GraphitiMemory(GraphMemory):
             )
             for edge in edges
         ]
+
+    async def neighborhood(self, entity: str, depth: int = 1) -> GraphNeighborhood:
+        """Extension de proche en proche : une requête Cypher à un saut par niveau.
+        La provenance vient du `source_description` (« source:nom ») écrit par
+        add_episode sur le premier épisode de chaque fait."""
+        nodes: set[str] = {entity}
+        edges: list[GraphEdge] = []
+        seen_edges: set[str] = set()
+        frontier = {entity.lower()}
+        visited: set[str] = set()
+        for _ in range(depth):
+            visited |= frontier
+            records, _, _ = await self._graphiti.driver.execute_query(
+                """
+                MATCH (a:Entity)-[r:RELATES_TO]-(b:Entity)
+                WHERE toLower(a.name) IN $names
+                OPTIONAL MATCH (ep:Episodic) WHERE ep.uuid IN r.episodes
+                RETURN a.name AS source, b.name AS target, r.uuid AS uuid,
+                       r.fact AS text, r.valid_at AS valid_at, r.invalid_at AS invalid_at,
+                       collect(ep.source_description)[0] AS source_description
+                """,
+                names=sorted(frontier),
+            )
+            reached: set[str] = set()
+            for record in records:
+                nodes.update((record["source"], record["target"]))
+                reached.update((record["source"].lower(), record["target"].lower()))
+                if record["uuid"] in seen_edges:
+                    continue
+                seen_edges.add(record["uuid"])
+                source_description = record["source_description"] or "conversation:inconnue"
+                prov_source, _, prov_name = source_description.partition(":")
+                edges.append(
+                    GraphEdge(
+                        source=record["source"],
+                        target=record["target"],
+                        text=record["text"],
+                        provenance=Provenance(
+                            source=prov_source if prov_source in ("conversation", "document")
+                            else "conversation",
+                            name=prov_name or source_description,
+                        ),
+                        valid_at=record["valid_at"],
+                        invalid_at=record["invalid_at"],
+                    )
+                )
+            frontier = reached - visited
+            if not frontier:
+                break
+        return GraphNeighborhood(center=entity, nodes=sorted(nodes), edges=edges)
 
     async def forget(self, entity: str) -> int:
         """Suppression réelle des nœuds dont le nom correspond, et de leurs relations."""

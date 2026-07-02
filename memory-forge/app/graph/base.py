@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from app.schemas import EpisodeIn, Fact
+from app.schemas import EpisodeIn, Fact, GraphNeighborhood
 
 
 class GraphMemory(ABC):
@@ -20,3 +20,8 @@ class GraphMemory(ABC):
     @abstractmethod
     async def forget(self, entity: str) -> int:
         """Oubli : suppression réelle des faits liés à l'entité. Renvoie le nombre supprimé."""
+
+    @abstractmethod
+    async def neighborhood(self, entity: str, depth: int = 1) -> GraphNeighborhood:
+        """Voisinage d'une entité, étendu de proche en proche jusqu'à `depth` sauts —
+        alimente la visualisation (scénario visualisation d'ACCEPTANCE-MEMOIRE.md)."""

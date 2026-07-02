@@ -157,6 +157,10 @@ services:
       MEMORY_FORGE_NEO4J_PASSWORD: memoryforge
       MEMORY_FORGE_LLM_BASE_URL: http://llm:8080/v1
       MEMORY_FORGE_EMBEDDER_BASE_URL: http://embedder:8080/v1
+      MEMORY_FORGE_DOCUMENTS_DIR: /documents
+    volumes:
+      # lecture-écriture : le watcher y persiste .memory-forge-state.json
+      - ./documents:/documents
     ports:
       - "127.0.0.1:8200:8200"
     depends_on:

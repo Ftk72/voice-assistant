@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from app.config import Settings
 from app.graph.base import GraphMemory
 from app.graph.fake import InMemoryGraph
+from app.ingest.watcher import DocumentWatcher
 from app.mcp_server import build_mcp
 from app.routes.api import router
 from app.schemas import EpisodeIn
@@ -35,6 +36,20 @@ async def extraction_worker(queue: asyncio.Queue[EpisodeIn], graph: GraphMemory)
             queue.task_done()
 
 
+async def watch_documents(
+    watcher: DocumentWatcher, queue: asyncio.Queue[EpisodeIn], poll_seconds: float
+) -> None:
+    """Polling du dossier documents/ ; les épisodes rejoignent la même file
+    que les conversations (extraction différée)."""
+    while True:
+        try:
+            for episode in await asyncio.to_thread(watcher.scan_once):
+                queue.put_nowait(episode)
+        except Exception:
+            logger.exception("Échec du scan du dossier documents")
+        await asyncio.sleep(poll_seconds)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     graph = build_graph(settings)
@@ -42,10 +57,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        worker = asyncio.create_task(extraction_worker(app.state.queue, app.state.graph))
+        tasks = [asyncio.create_task(extraction_worker(app.state.queue, app.state.graph))]
+        if settings.documents_dir is not None:
+            watcher = DocumentWatcher(settings.documents_dir)
+            tasks.append(
+                asyncio.create_task(
+                    watch_documents(watcher, app.state.queue, settings.documents_poll_seconds)
+                )
+            )
         async with mcp.session_manager.run():
             yield
-        worker.cancel()
+        for task in tasks:
+            task.cancel()
 
     app = FastAPI(title="Memory Forge", lifespan=lifespan)
     app.state.settings = settings
