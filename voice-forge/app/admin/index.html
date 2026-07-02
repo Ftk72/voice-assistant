@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice Forge — Administration des voix</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #0d0d0d; color: #ececec;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; justify-content: center; padding: 2rem 1rem;
+  }
+  main { width: 100%; max-width: 640px; }
+  h1 { font-size: 1.3rem; font-weight: 600; margin: 0 0 .25rem; }
+  p.sub { color: #9b9b9b; font-size: .85rem; margin: 0 0 1.5rem; }
+  .card {
+    background: #171717; border: 1px solid #2a2a2a; border-radius: 12px;
+    padding: 1rem 1.25rem; margin-bottom: 1rem;
+  }
+  .voice { display: flex; align-items: center; gap: .75rem; padding: .5rem 0; border-bottom: 1px solid #232323; }
+  .voice:last-child { border-bottom: none; }
+  .voice .name { flex: 1; font-weight: 500; }
+  button {
+    background: #2a2a2a; color: #ececec; border: 1px solid #3a3a3a; border-radius: 8px;
+    padding: .4rem .8rem; font-size: .85rem; cursor: pointer;
+  }
+  button:hover { background: #3a3a3a; }
+  button.danger:hover { background: #7f1d1d; border-color: #991b1b; }
+  form { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
+  input[type="text"] {
+    background: #0d0d0d; border: 1px solid #3a3a3a; border-radius: 8px;
+    color: #ececec; padding: .45rem .7rem; font-size: .9rem; flex: 1; min-width: 140px;
+  }
+  input[type="file"] { font-size: .85rem; color: #9b9b9b; }
+  #status { font-size: .85rem; color: #9b9b9b; min-height: 1.2em; margin-top: .5rem; }
+  #status.error { color: #f87171; }
+  audio { height: 32px; }
+  .empty { color: #9b9b9b; font-size: .9rem; padding: .5rem 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Voice Forge</h1>
+  <p class="sub">Administration des voix — l'usage quotidien (sélection, appel) se fait dans OpenWebUI.</p>
+
+  <section class="card">
+    <h2 style="font-size:1rem;margin:0 0 .75rem">Importer une voix</h2>
+    <form id="import-form">
+      <input type="text" name="name" placeholder="Nom de la voix (ex. Emma)" required
+             pattern="[\w À-ÿ'-]{1,50}">
+      <input type="file" name="speaker" accept="audio/wav,.wav" required>
+      <button type="submit">Importer</button>
+    </form>
+    <div id="status"></div>
+  </section>
+
+  <section class="card">
+    <h2 style="font-size:1rem;margin:0 0 .5rem">Voix disponibles</h2>
+    <div id="voices"></div>
+  </section>
+</main>
+
+<script>
+const statusEl = document.getElementById("status");
+const setStatus = (msg, isError = false) => {
+  statusEl.textContent = msg;
+  statusEl.className = isError ? "error" : "";
+};
+
+async function refresh() {
+  const { voices } = await (await fetch("/audio/voices")).json();
+  const container = document.getElementById("voices");
+  container.innerHTML = "";
+  if (!voices.length) {
+    container.innerHTML = '<div class="empty">Aucune voix. Importez un speaker.wav ci-dessus ou déposez un dossier dans voices/.</div>';
+    return;
+  }
+  for (const voice of voices) {
+    const row = document.createElement("div");
+    row.className = "voice";
+    row.innerHTML = `<span class="name"></span>
+      <button class="preview">Aperçu</button>
+      <button class="danger delete">Supprimer</button>`;
+    row.querySelector(".name").textContent = voice.name;
+    row.querySelector(".preview").onclick = () => preview(voice.id, row);
+    row.querySelector(".delete").onclick = () => remove(voice.id);
+    container.appendChild(row);
+  }
+}
+
+async function preview(id, row) {
+  setStatus("Synthèse de l'aperçu…");
+  const response = await fetch(`/admin/api/voices/${encodeURIComponent(id)}/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!response.ok) return setStatus("Échec de l'aperçu.", true);
+  const url = URL.createObjectURL(await response.blob());
+  row.querySelector("audio")?.remove();
+  const audio = document.createElement("audio");
+  audio.controls = true;
+  audio.src = url;
+  row.appendChild(audio);
+  audio.play();
+  setStatus("");
+}
+
+async function remove(id) {
+  if (!confirm(`Supprimer la voix « ${id} » ?`)) return;
+  const response = await fetch(`/admin/api/voices/${encodeURIComponent(id)}`, { method: "DELETE" });
+  setStatus(response.ok ? `Voix « ${id} » supprimée.` : "Échec de la suppression.", !response.ok);
+  refresh();
+}
+
+document.getElementById("import-form").onsubmit = async (event) => {
+  event.preventDefault();
+  setStatus("Import…");
+  const response = await fetch("/admin/api/voices", {
+    method: "POST",
+    body: new FormData(event.target),
+  });
+  if (response.ok) {
+    setStatus("Voix importée. Elle est déjà visible dans OpenWebUI.");
+    event.target.reset();
+  } else {
+    const detail = (await response.json()).detail;
+    setStatus(typeof detail === "string" ? detail : "Nom invalide.", true);
+  }
+  refresh();
+};
+
+refresh();
+</script>
+</body>
+</html>

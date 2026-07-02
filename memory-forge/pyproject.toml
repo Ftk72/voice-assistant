@@ -1,0 +1,39 @@
+[project]
+name = "memory-forge"
+version = "0.1.0"
+description = "Mémoire persistante en graphe (Graphiti/Neo4j) pour l'assistant vocal — consommée par OpenWebUI via Filter et MCP"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "mcp>=1.28.1",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "uvicorn>=0.32",
+]
+
+[project.optional-dependencies]
+# Extra volontairement séparé : graphiti-core + driver neo4j.
+# Installer plus tard avec : uv sync --extra graphiti
+graphiti = [
+    "graphiti-core>=0.5",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.5.0",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
