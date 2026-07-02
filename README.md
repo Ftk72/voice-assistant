@@ -52,3 +52,4 @@ Voir [voice-forge/README.md](voice-forge/README.md) — `uv run pytest` (22 test
 2. Valider la config Audio dans OpenWebUI et créer les personas.
 3. **Mesurer la latence** fin de parole → début de réponse (cible ≤ 2 s, docs/ACCEPTANCE.md) et ajuster (`--n-cpu-moe`, contexte, streaming TTS).
 4. Vérifier l'API réelle de `chatterbox-tts` (l'adaptateur `_RealChatterboxEngine` est écrit d'après la doc, jamais exécuté).
+# voice-assistant
