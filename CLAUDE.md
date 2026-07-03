@@ -24,6 +24,10 @@ docs, commits.
   explicite ; petites dépendances PyPI via uv OK (cache local).
 - Implémentations volumineuses : déléguer via `/delegate` (haiku→sonnet→opus),
   vérification finale par l'agent principal.
+- Avant toute tâche significative : audit des prémisses (`/premisses`) — les
+  croyances des handoffs se vérifient, ne se croient pas.
+- Toute piste morte se capture à chaud dans `docs/impasses.md` (`/impasses`) ;
+  consulter ce registre avant tout diagnostic.
 
 ## Conventions des forges (voice-forge, memory-forge, world-forge, time-forge, host-bridge)
 
