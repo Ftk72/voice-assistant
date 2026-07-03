@@ -16,3 +16,6 @@ voices/*
 
 # État du watcher documentaire (ADR 0006)
 .memory-forge-state.json
+
+# Secrets locaux (SEARXNG_SECRET…)
+.env

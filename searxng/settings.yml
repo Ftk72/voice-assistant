@@ -1,5 +1,6 @@
 # Configuration minimale de SearXNG (méta-moteur auto-hébergé, ADR 0007).
-# Au premier lancement : remplacez secret_key par une valeur aléatoire.
+# La vraie clé est fournie par SEARXNG_SECRET (fichier .env non versionné, cf. compose) ;
+# la valeur ci-dessous n'est qu'un garde-fou jamais utilisé.
 
 use_default_settings: true
 

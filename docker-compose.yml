@@ -182,6 +182,9 @@ services:
   searxng:
     # Méta-moteur auto-hébergé — image à puller au jour de bonne connexion.
     image: searxng/searxng:latest
+    environment:
+      # Prime sur server.secret_key de settings.yml — la clé vit dans .env (non versionné).
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?définir SEARXNG_SECRET dans .env}
     volumes:
       - ./searxng:/etc/searxng:rw
     ports:
