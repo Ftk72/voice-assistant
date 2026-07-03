@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 
 
 class HostBridgeAnnouncer(Announcer):
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, client: httpx.AsyncClient | None = None) -> None:
         self._settings = settings
-        self._client = httpx.AsyncClient(timeout=30.0)
+        self._client = client or httpx.AsyncClient(timeout=30.0)
 
     async def announce(self, text: str) -> None:
         try:
@@ -32,10 +32,13 @@ class HostBridgeAnnouncer(Announcer):
                 },
             )
             speech.raise_for_status()
+            headers = {"Content-Type": "audio/wav"}
+            if self._settings.host_bridge_token:
+                headers["X-Bridge-Token"] = self._settings.host_bridge_token
             played = await self._client.post(
                 f"{self._settings.host_bridge_url}/play",
                 content=speech.content,
-                headers={"Content-Type": "audio/wav"},
+                headers=headers,
             )
             played.raise_for_status()
         except httpx.HTTPError:

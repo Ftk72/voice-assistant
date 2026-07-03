@@ -1,6 +1,9 @@
+import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from app.actions.base import ActionRunner
 from app.actions.fake import FakeRunner
@@ -47,4 +50,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.player = player
     app.include_router(router)
     app.mount("/mcp", mcp.streamable_http_app())
+
+    if settings.token:
+        # Middleware plutôt que dépendance FastAPI : il couvre aussi le
+        # sous-serveur MCP monté sur /mcp.
+        @app.middleware("http")
+        async def verifier_le_jeton(request: Request, call_next):
+            if request.url.path == "/health":
+                return await call_next(request)
+            fourni = request.headers.get("X-Bridge-Token", "")
+            if not secrets.compare_digest(fourni, settings.token):
+                return JSONResponse({"detail": "jeton invalide"}, status_code=401)
+            return await call_next(request)
+
     return app

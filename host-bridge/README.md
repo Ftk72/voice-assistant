@@ -33,6 +33,11 @@ Forge y envoie ses annonces ; OpenWebUI y branche le serveur MCP
 - En usage réel, écouter sur `0.0.0.0` (`HOST_BRIDGE_HOST=0.0.0.0`) pour être
   joignable depuis le réseau Docker, et **limiter au réseau Docker par le
   pare-feu**. Le Pont n'expose que la liste blanche du catalogue, jamais un shell.
+- **Jeton partagé** : `0.0.0.0` expose aussi le Pont au LAN (surtout si WSL passe
+  en réseau « mirrored »). Définir `HOST_BRIDGE_TOKEN` au lancement du Pont
+  (même valeur que `HOST_BRIDGE_TOKEN` du `.env` racine, que le compose passe au
+  Time Forge) : toute requête doit alors porter le header `X-Bridge-Token`, sauf
+  `/health`. Jeton vide = auth désactivée (dev local sur 127.0.0.1 uniquement).
 - Le catalogue est fermé : ce qui n'y figure pas ne peut pas être lancé, point.
 
 ## Adaptateurs

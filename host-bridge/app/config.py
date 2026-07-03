@@ -15,3 +15,7 @@ class Settings(BaseSettings):
     catalog_path: Path = Path("catalog.toml")
     runner: Literal["fake", "subprocess"] = "fake"
     player: Literal["fake", "auto"] = "fake"
+    # Jeton partagé exigé sur toutes les routes sauf /health quand il est défini
+    # (le Pont écoute sur 0.0.0.0 en usage réel : seule la stack doit pouvoir
+    # déclencher les actions). Vide = auth désactivée (dev local).
+    token: str = ""

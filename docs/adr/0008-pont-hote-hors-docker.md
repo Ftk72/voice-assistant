@@ -45,3 +45,16 @@ Un **seul** composant tourne hors Docker : le **Pont hôte** (`host-bridge/`).
   l'hôte ; le Pont doit rester léger et sans intelligence.
 - **Opérateur libre / commandes arbitraires** : refusé au grilling. Le catalogue
   est fermé ; l'assistant n'a jamais accès à un shell.
+
+## Addendum 2026-07-03 — jeton partagé
+
+Écouter sur `0.0.0.0` (nécessaire pour `host.docker.internal`) expose aussi le
+Pont au LAN — le NAT de WSL2 protège par accident, plus du tout en réseau
+« mirrored ». Un **jeton partagé** (`HOST_BRIDGE_TOKEN`, header `X-Bridge-Token`,
+comparaison en temps constant) est donc exigé sur toutes les routes sauf
+`/health` dès qu'il est défini ; le Time Forge le présente
+(`TIME_FORGE_HOST_BRIDGE_TOKEN`, injecté par le compose depuis le `.env` non
+versionné). Jeton vide = auth désactivée, réservé au dev local sur `127.0.0.1`.
+Un reverse proxy (nginx/Caddy) a été écarté : aucun service n'est exposé
+au-delà du loopback, il n'y a pas de frontière réseau à protéger — à
+re-grillinger le jour d'un accès distant (téléphone, LAN).

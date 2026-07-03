@@ -19,4 +19,6 @@ class Settings(BaseSettings):
     voice_forge_url: str = "http://voice-forge:8100"
     # Le Pont hôte tourne sur la machine hôte, hors Docker (ADR 0008).
     host_bridge_url: str = "http://host.docker.internal:8500"
+    # Jeton partagé attendu par le Pont (vide = Pont sans auth, dev local).
+    host_bridge_token: str = ""
     announce_voice: str = "default"
