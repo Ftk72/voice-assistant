@@ -40,7 +40,12 @@
 - **Pourquoi c'est mort** : trois réglages du formulaire échouent en silence. (1) **Auth « Bearer » avec clé vide** : OpenWebUI envoie un en-tête `Authorization: Bearer` suivi d'une espace sans valeur (illégal), httpx refuse d'émettre la requête (`LocalProtocolError`), avalée en `log.debug` (« unhandled errors in a TaskGroup ») — visible uniquement avec `GLOBAL_LOG_LEVEL=DEBUG`. (2) Le champ **Function Name Filter** est une liste blanche (`endswith`) : y mettre un libellé descriptif (« memoire ») écarte tous les outils. (3) Les `toolIds` d'un modèle ne sont transmis que par le **frontend** à l'ouverture d'un chat neuf — le backend ne les applique pas de lui-même, et un chat existant ne les récupère pas
 - **Valide tant que** : les connexions MCP du panneau admin gardent auth `none` (ou une clé non vide) et un champ de filtre vide ; piège re-vérifiable en 30 s via l'API avec `tool_ids` explicites et les logs du serveur MCP visé
 
-## 2026-07-06 — Chatterbox inutilisable sur RTX 5080 : torch 2.6.0/cu124 sans noyaux sm_120
+## ~~2026-07-06 — Chatterbox inutilisable sur RTX 5080 : torch 2.6.0/cu124 sans noyaux sm_120~~ — PÉRIMÉE le 2026-07-06
+
+> Condition de péremption atteinte le jour même : `override-dependencies = ["torch>=2.8,<2.9", "torchaudio>=2.8,<2.9"]`
+> dans `voice-forge/pyproject.toml` (roues PyPI cu128, noyaux sm_120 inclus). Synthèse validée en réel :
+> 41 s au premier appel (chargement du modèle), **1,94 s en régime**, VRAM 14,6/16,3 Go avec le LLM chargé.
+> L'API chatterbox n'a pas souffert du saut 2.6 → 2.8.
 
 - **Tenté** : première synthèse TTS réelle (`_RealChatterboxEngine`, voix de test enrôlée, `scripts/smoke-tts.sh`) — le chargement du modèle passait, la synthèse était le vrai test (prémisse différée des handoffs 0007/0008)
 - **Pourquoi c'est mort** : `RuntimeError: CUDA error: no kernel image is available for execution on the device` dès le `.to("cuda")` du voice encoder (RNN/cuDNN, `torch._cudnn_rnn_flatten_weight`). torch 2.6.0 (épinglé par `chatterbox-tts`, roues cu124) n'embarque aucun noyau compilé pour Blackwell **sm_120** ; le support arrive avec torch ≥ 2.7 / CUDA 12.8. Ce n'est pas un bug de notre code

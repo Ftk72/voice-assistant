@@ -32,6 +32,12 @@ dev = [
 # Python < 3.10 est dynamique dans setup.py, donc invisible à la résolution — la
 # compilation de llvmlite 0.36.0 échouait au build de l'image sous Python 3.12.
 constraint-dependencies = ["numba>=0.60", "llvmlite>=0.43"]
+# Casse l'épinglage torch==2.6.0 de chatterbox-tts : les roues cu124 n'ont aucun
+# noyau Blackwell sm_120 (RTX 5080) — « no kernel image », impasse du 2026-07-06.
+# Depuis torch 2.8, les roues PyPI par défaut sont cu128 (sm_120 inclus).
+# Compatibilité API chatterbox/torch 2.8 non garantie par l'amont : validée par
+# le smoke-tts uniquement.
+override-dependencies = ["torch>=2.8,<2.9", "torchaudio>=2.8,<2.9"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
