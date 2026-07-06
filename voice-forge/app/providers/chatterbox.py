@@ -1,3 +1,4 @@
+import functools
 import json
 import logging
 import time
@@ -31,8 +32,15 @@ class ChatterboxProvider(BaseTTSProvider):
 
     media_type = "audio/wav"
 
-    def __init__(self, engine_factory: Callable[[], ChatterboxEngine] | None = None) -> None:
-        self._engine_factory = engine_factory or _RealChatterboxEngine
+    def __init__(
+        self,
+        engine_factory: Callable[[], ChatterboxEngine] | None = None,
+        chatterbox_dir: Path | None = None,
+    ) -> None:
+        self.chatterbox_dir = chatterbox_dir
+        self._engine_factory = engine_factory or functools.partial(
+            _RealChatterboxEngine, local_dir=chatterbox_dir
+        )
         self._engine: ChatterboxEngine | None = None
 
     def synthesize(self, text: str, speaker_wav: Path) -> bytes:
@@ -68,12 +76,38 @@ class ChatterboxProvider(BaseTTSProvider):
 
 class _RealChatterboxEngine:
     """Adaptateur du vrai modèle. Imports paresseux : chatterbox/torch ne sont
-    requis qu'à l'exécution avec VOICE_FORGE_PROVIDER=chatterbox."""
+    requis qu'à l'exécution avec VOICE_FORGE_PROVIDER=chatterbox.
 
-    def __init__(self) -> None:
-        from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+    Jamais exécuté à ce jour.
 
-        self._model = ChatterboxMultilingualTTS.from_pretrained(device="cuda")
+    Deux modes, selon `local_dir` :
+    - `local_dir` fourni : pipeline anglais `ChatterboxTTS` chargé via
+      `from_local`, dont le `t3_cfg.safetensors` a été remplacé par le
+      fine-tune français Thomcles/Chatterbox-TTS-French. Ce pipeline ne
+      connaît pas la notion de langue (`generate()` n'a pas de paramètre
+      `language_id`) : le paramètre `language` reçu par `synthesize_wav`
+      est donc ignoré, un avertissement est loggé une seule fois au
+      chargement.
+    - `local_dir` absent : comportement historique, pipeline multilingue
+      `ChatterboxMultilingualTTS.from_pretrained`, sélection de la langue
+      via `language_id`.
+    """
+
+    def __init__(self, local_dir: Path | None = None) -> None:
+        self._local_dir = local_dir
+        if local_dir is not None:
+            from chatterbox.tts import ChatterboxTTS
+
+            logger.debug(
+                "Chatterbox : pipeline anglais + fine-tune T3 français (%s) — "
+                "paramètre 'language' ignoré (pas de language_id sur ce pipeline).",
+                local_dir,
+            )
+            self._model = ChatterboxTTS.from_local(str(local_dir), device="cuda")
+        else:
+            from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+
+            self._model = ChatterboxMultilingualTTS.from_pretrained(device="cuda")
 
     def synthesize_wav(
         self, text: str, speaker_wav: Path, *, language: str, exaggeration: float, cfg_weight: float
@@ -82,13 +116,21 @@ class _RealChatterboxEngine:
 
         import torchaudio
 
-        wav = self._model.generate(
-            text,
-            language_id=language,
-            audio_prompt_path=str(speaker_wav),
-            exaggeration=exaggeration,
-            cfg_weight=cfg_weight,
-        )
+        if self._local_dir is not None:
+            wav = self._model.generate(
+                text,
+                audio_prompt_path=str(speaker_wav),
+                exaggeration=exaggeration,
+                cfg_weight=cfg_weight,
+            )
+        else:
+            wav = self._model.generate(
+                text,
+                language_id=language,
+                audio_prompt_path=str(speaker_wav),
+                exaggeration=exaggeration,
+                cfg_weight=cfg_weight,
+            )
         buffer = io.BytesIO()
         torchaudio.save(buffer, wav, self._model.sr, format="wav")
         return buffer.getvalue()

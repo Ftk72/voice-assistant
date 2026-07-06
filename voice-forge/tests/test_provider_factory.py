@@ -17,6 +17,13 @@ def test_chatterbox_est_selectionnable_sans_charger_le_modele(tmp_path):
     assert isinstance(provider.inner, ChatterboxProvider)
 
 
+def test_chatterbox_recoit_le_repertoire_local_des_settings(tmp_path):
+    chatterbox_dir = tmp_path / "modele"
+    provider = build_provider(Settings(provider="chatterbox", chatterbox_dir=chatterbox_dir))
+
+    assert provider.chatterbox_dir == chatterbox_dir
+
+
 def test_le_cache_enveloppe_le_provider_si_cache_dir(tmp_path):
     from app.providers.cache import CachedProvider
 

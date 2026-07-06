@@ -12,3 +12,4 @@ class Settings(BaseSettings):
     port: int = 8100
     provider: Literal["fake", "chatterbox"] = "fake"
     cache_dir: Path | None = None
+    chatterbox_dir: Path | None = None

@@ -58,6 +58,22 @@ def test_config_json_de_la_voix_surcharge_les_parametres(speaker_wav):
     assert "autre_cle" not in call
 
 
+def test_le_repertoire_local_est_transmis_a_la_fabrique_par_defaut(tmp_path):
+    """Sans engine_factory injecté, la fabrique par défaut doit transmettre
+    chatterbox_dir au futur _RealChatterboxEngine — sans jamais l'instancier."""
+    chatterbox_dir = tmp_path / "modele"
+
+    provider = ChatterboxProvider(chatterbox_dir=chatterbox_dir)
+
+    assert provider._engine_factory.keywords == {"local_dir": chatterbox_dir}
+
+
+def test_sans_repertoire_local_la_fabrique_par_defaut_transmet_none():
+    provider = ChatterboxProvider()
+
+    assert provider._engine_factory.keywords == {"local_dir": None}
+
+
 def test_le_moteur_n_est_charge_qu_a_la_premiere_synthese(speaker_wav):
     loads = []
 

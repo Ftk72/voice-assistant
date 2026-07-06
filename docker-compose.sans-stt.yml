@@ -1,0 +1,20 @@
+# Lancement partiel SANS le service STT (modèle Voxtral pas encore téléchargé) :
+#
+#   docker compose -f docker-compose.yml -f docker-compose.sans-stt.yml up -d
+#
+# `!reset` remplace entièrement le depends_on d'openwebui (on retire l'attente
+# du stt) ; le profil « avec-stt » écarte le service stt du lancement.
+# Limite assumée : la transcription échouera dans l'UI OpenWebUI (micro), tout
+# le reste fonctionne. Supprimer ce fichier de la commande une fois le modèle
+# Voxtral en place.
+
+services:
+  openwebui:
+    depends_on: !reset
+      llm:
+        condition: service_healthy
+      voice-forge:
+        condition: service_healthy
+
+  stt:
+    profiles: ["avec-stt"]

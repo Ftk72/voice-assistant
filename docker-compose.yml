@@ -14,7 +14,8 @@ x-gpu: &gpu
 
 services:
   openwebui:
-    image: ghcr.io/open-webui/open-webui:v0.10.2
+    # v0.10.2 figée par digest (image déjà tirée le 2026-07-06).
+    image: ghcr.io/open-webui/open-webui@sha256:9fcea9c6e32ab60b0498f3986c6cdf651ddbe61db48d2213a3d28048ddd673d4
     ports:
       - "127.0.0.1:3000:8080"
     environment:
@@ -47,7 +48,8 @@ services:
 
   llm:
     # Qwen3.6-35B-A3B Q4_K_M, experts MoE déchargés en RAM (~6 Go VRAM, ADR 0004)
-    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    # tag « server-cuda » figé par digest (image déjà tirée le 2026-07-06).
+    image: ghcr.io/ggml-org/llama.cpp@sha256:c52d27d6c81fa224711ab8fd9cf415fd824bd1eeefb380bf920abaa54bebb752
     command: >-
       -m /models/qwen3.6-35b-a3b-q4_k_m.gguf
       --host 0.0.0.0 --port 8080
@@ -68,7 +70,8 @@ services:
 
   stt:
     # Voxtral Mini GGUF (~3 Go VRAM, ADR 0001) — /v1/audio/transcriptions
-    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    # tag « server-cuda » figé par digest (image déjà tirée le 2026-07-06).
+    image: ghcr.io/ggml-org/llama.cpp@sha256:c52d27d6c81fa224711ab8fd9cf415fd824bd1eeefb380bf920abaa54bebb752
     command: >-
       -m /models/voxtral-mini-q4_k_m.gguf
       --mmproj /models/voxtral-mini-mmproj.gguf
@@ -96,10 +99,12 @@ services:
       VOICE_FORGE_PROVIDER: chatterbox
       VOICE_FORGE_VOICES_DIR: /data/voices
       VOICE_FORGE_CACHE_DIR: /data/cache
+      VOICE_FORGE_CHATTERBOX_DIR: /models/chatterbox
       HF_HOME: /data/hf-cache            # poids Chatterbox (pré-téléchargeables)
     volumes:
       - ./voices:/data/voices
       - ./models/hf-cache:/data/hf-cache
+      - ./models/chatterbox:/models/chatterbox:ro
       - voice-forge-cache:/data/cache
     ports:
       - "127.0.0.1:8100:8100"   # mini-page d'admin des voix : http://127.0.0.1:8100/admin
@@ -114,7 +119,8 @@ services:
   # ---- Mémoire persistante (phase 2, ADR 0005) ----
 
   neo4j:
-    image: neo4j:5-community
+    # tag « 5-community » figé par digest (image déjà tirée le 2026-07-06).
+    image: neo4j@sha256:4bae36aff76271e27fd6a6ed0835413f86a284cd179cfb1cb7d188f5f7533aca
     environment:
       # Mot de passe dans .env (non versionné), comme SEARXNG_SECRET et HOST_BRIDGE_TOKEN.
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?définir NEO4J_PASSWORD dans .env}
@@ -133,7 +139,8 @@ services:
 
   embedder:
     # bge-m3 sur CPU (ADR 0005) — API embeddings compatible OpenAI
-    image: ghcr.io/ggml-org/llama.cpp:server
+    # tag « server » (CPU) figé par digest (image déjà tirée le 2026-07-06).
+    image: ghcr.io/ggml-org/llama.cpp@sha256:ac8b800287d2f6cd2d200b7f718c14ee79cc810db2115b63d2f04284e499a98e
     command: >-
       -m /models/bge-m3-q8_0.gguf
       --embeddings
@@ -181,8 +188,8 @@ services:
   # ---- Monde extérieur (phase 6, ADR 0007) ----
 
   searxng:
-    # Méta-moteur auto-hébergé — image à puller au jour de bonne connexion.
-    image: searxng/searxng:latest
+    # Méta-moteur auto-hébergé — tag daté figé (= latest au 2026-07-05, déjà tiré).
+    image: searxng/searxng:2026.7.5-a6438586a
     environment:
       # Prime sur server.secret_key de settings.yml — la clé vit dans .env (non versionné).
       SEARXNG_SECRET: ${SEARXNG_SECRET:?définir SEARXNG_SECRET dans .env}

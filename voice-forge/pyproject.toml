@@ -2,7 +2,7 @@
 name = "voice-forge"
 version = "0.1.0"
 description = "API TTS compatible OpenAI avec gestion de voix clonées, consommée par OpenWebUI"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.115",
     "pydantic>=2.9",
@@ -25,6 +25,13 @@ dev = [
     "pytest>=8.3",
     "ruff>=0.8",
 ]
+
+[tool.uv]
+# Force des versions de numba/llvmlite avec roues cp312. Sans cette borne, uv
+# conserve numba 0.53.1 (tiré par librosa via chatterbox-tts) : son plafond
+# Python < 3.10 est dynamique dans setup.py, donc invisible à la résolution — la
+# compilation de llvmlite 0.36.0 échouait au build de l'image sous Python 3.12.
+constraint-dependencies = ["numba>=0.60", "llvmlite>=0.43"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

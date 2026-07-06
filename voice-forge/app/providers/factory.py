@@ -7,7 +7,9 @@ from app.providers.fake import FakeProvider
 
 def build_provider(settings: Settings) -> BaseTTSProvider:
     provider: BaseTTSProvider = (
-        ChatterboxProvider() if settings.provider == "chatterbox" else FakeProvider()
+        ChatterboxProvider(chatterbox_dir=settings.chatterbox_dir)
+        if settings.provider == "chatterbox"
+        else FakeProvider()
     )
     if settings.cache_dir is not None:
         provider = CachedProvider(provider, settings.cache_dir)
