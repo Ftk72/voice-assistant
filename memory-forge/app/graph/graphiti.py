@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from app.config import Settings
 from app.graph.base import GraphMemory
+from app.graph.ontologie import TYPES_D_ENTITES
 from app.schemas import EpisodeIn, Fact, GraphEdge, GraphNeighborhood, Provenance
 
 
@@ -52,8 +53,13 @@ class GraphitiMemory(GraphMemory):
             settings.neo4j_uri,
             settings.neo4j_user,
             settings.neo4j_password,
+            # temperature=0 : le défaut de LLMConfig (1) rend l'extraction de nœuds
+            # instable sur épisode court (diagnostic 2026-07-06 — « pétanque » extrait
+            # 3/5 tirages seulement) ; l'extraction est une tâche déterministe.
             llm_client=OpenAIGenericClient(
-                config=LLMConfig(api_key="sk-local", base_url=settings.llm_base_url)
+                config=LLMConfig(
+                    api_key="sk-local", base_url=settings.llm_base_url, temperature=0
+                )
             ),
             embedder=OpenAIEmbedder(
                 config=OpenAIEmbedderConfig(
@@ -82,6 +88,9 @@ class GraphitiMemory(GraphMemory):
             source=EpisodeType.message if episode.source == "conversation" else EpisodeType.text,
             source_description=f"{episode.source}:{episode.name}",
             reference_time=datetime.now(UTC),
+            # Types explicites du domaine : sans eux, l'activité d'un épisode court
+            # (« judo », « pétanque ») saute une fois sur deux → zéro fait (cf. ontologie.py).
+            entity_types=TYPES_D_ENTITES,
         )
 
     async def search(self, query: str) -> list[Fact]:

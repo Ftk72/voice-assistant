@@ -95,6 +95,68 @@ def _memoire_avec(aretes, descriptions_par_uuid):
     return memoire
 
 
+class _FauxGraphitiEnregistreur:
+    """Capture les kwargs passés à `Graphiti.add_episode`."""
+
+    def __init__(self):
+        self.kwargs_add_episode = None
+
+    async def add_episode(self, **kwargs):
+        self.kwargs_add_episode = kwargs
+
+
+def _stubber_graphiti_nodes(monkeypatch):
+    """`GraphitiMemory.add_episode` importe `graphiti_core.nodes` (extra absent en
+    dev) : on injecte un module factice avec un `EpisodeType` minimal."""
+    import enum
+    import sys
+    import types
+
+    class EpisodeType(enum.Enum):
+        message = "message"
+        text = "text"
+
+    faux_nodes = types.ModuleType("graphiti_core.nodes")
+    faux_nodes.EpisodeType = EpisodeType
+    faux_graphiti_core = types.ModuleType("graphiti_core")
+    faux_graphiti_core.nodes = faux_nodes
+    monkeypatch.setitem(sys.modules, "graphiti_core", faux_graphiti_core)
+    monkeypatch.setitem(sys.modules, "graphiti_core.nodes", faux_nodes)
+    return EpisodeType
+
+
+class TestAddEpisode:
+    async def test_l_episode_part_avec_les_types_d_entites_du_domaine(self, monkeypatch):
+        from app.graph.ontologie import TYPES_D_ENTITES
+        from app.schemas import EpisodeIn
+
+        _stubber_graphiti_nodes(monkeypatch)
+        memoire = GraphitiMemory.__new__(GraphitiMemory)
+        memoire._graphiti = _FauxGraphitiEnregistreur()
+
+        await memoire.add_episode(
+            EpisodeIn(content="Mon oncle Marcel commence la pétanque jeudi.",
+                      source="conversation", name="marcel")
+        )
+
+        kwargs = memoire._graphiti.kwargs_add_episode
+        assert kwargs is not None
+        assert kwargs["entity_types"] is TYPES_D_ENTITES
+
+    async def test_une_source_conversation_devient_un_episode_message(self, monkeypatch):
+        from app.schemas import EpisodeIn
+
+        episode_type = _stubber_graphiti_nodes(monkeypatch)
+        memoire = GraphitiMemory.__new__(GraphitiMemory)
+        memoire._graphiti = _FauxGraphitiEnregistreur()
+
+        await memoire.add_episode(
+            EpisodeIn(content="Bonjour.", source="conversation", name="salut")
+        )
+
+        assert memoire._graphiti.kwargs_add_episode["source"] is episode_type.message
+
+
 class TestSearch:
     async def test_un_fait_issu_d_un_document_porte_la_provenance_document(self):
         memoire = _memoire_avec(
