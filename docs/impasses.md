@@ -33,3 +33,9 @@
 - **Tenté** : premier `docker compose up` avec le service openwebui sans variables `RAG_*` ni `OFFLINE_MODE`
 - **Pourquoi c'est mort** : OpenWebUI télécharge ses modèles d'embedding RAG par défaut (`sentence-transformers/all-MiniLM-L6-v2` puis `TaylorAI/bge-micro-v2`, tous formats : onnx, openvino…) — 1 067 Mo constatés dans le volume, en violation du principe souverain/connexion lente, alors que l'embedder bge-m3 local existe pour ça
 - **Valide tant que** : le service openwebui du compose garde `RAG_EMBEDDING_ENGINE=openai` (pointé sur `http://embedder:8080/v1`) et `OFFLINE_MODE=true` (qui force `HF_HUB_OFFLINE=1`)
+
+## 2026-07-06 — connexion MCP OpenWebUI muette : trois pièges de formulaire empilés, tous silencieux
+
+- **Tenté** : brancher les outils `recall`/`forget` du Memory Forge dans OpenWebUI v0.10.2 (Admin Settings → Tools, type MCP) — la connexion se créait mais aucun appel n'atteignait jamais le serveur, sans aucune erreur visible
+- **Pourquoi c'est mort** : trois réglages du formulaire échouent en silence. (1) **Auth « Bearer » avec clé vide** : OpenWebUI envoie un en-tête `Authorization: Bearer` suivi d'une espace sans valeur (illégal), httpx refuse d'émettre la requête (`LocalProtocolError`), avalée en `log.debug` (« unhandled errors in a TaskGroup ») — visible uniquement avec `GLOBAL_LOG_LEVEL=DEBUG`. (2) Le champ **Function Name Filter** est une liste blanche (`endswith`) : y mettre un libellé descriptif (« memoire ») écarte tous les outils. (3) Les `toolIds` d'un modèle ne sont transmis que par le **frontend** à l'ouverture d'un chat neuf — le backend ne les applique pas de lui-même, et un chat existant ne les récupère pas
+- **Valide tant que** : les connexions MCP du panneau admin gardent auth `none` (ou une clé non vide) et un champ de filtre vide ; piège re-vérifiable en 30 s via l'API avec `tool_ids` explicites et les logs du serveur MCP visé
