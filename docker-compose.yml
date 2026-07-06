@@ -33,6 +33,15 @@ services:
       AUDIO_TTS_OPENAI_API_BASE_URL: http://voice-forge:8100/v1
       AUDIO_TTS_OPENAI_API_KEY: sk-local
       AUDIO_TTS_MODEL: tts-1
+      # RAG — embeddings via le service bge-m3, sinon OpenWebUI télécharge ses
+      # propres modèles sentence-transformers depuis HuggingFace (~1 Go, constaté
+      # au premier lancement du 2026-07-06 — voir docs/impasses.md).
+      RAG_EMBEDDING_ENGINE: openai
+      RAG_OPENAI_API_BASE_URL: http://embedder:8080/v1
+      RAG_OPENAI_API_KEY: sk-local
+      RAG_EMBEDDING_MODEL: bge-m3
+      # Souveraineté : force HF_HUB_OFFLINE=1 — plus aucun téléchargement HF possible.
+      OFFLINE_MODE: "true"
       # NB : ces variables ne sont lues qu'au premier démarrage (PersistentConfig) ;
       # ensuite la config vit dans la base d'OpenWebUI (Admin → Settings → Audio).
     volumes:
@@ -55,6 +64,7 @@ services:
       --host 0.0.0.0 --port 8080
       -ngl 999 --n-cpu-moe 999
       -c 8192 --jinja
+      --reasoning off
     <<: *gpu
     volumes:
       - ./models/llm:/models:ro

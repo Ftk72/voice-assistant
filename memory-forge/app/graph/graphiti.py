@@ -16,6 +16,7 @@ class GraphitiMemory(GraphMemory):
     def __init__(self, settings: Settings) -> None:
         try:
             from graphiti_core import Graphiti
+            from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
             from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
             from graphiti_core.llm_client.config import LLMConfig
             from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
@@ -35,6 +36,12 @@ class GraphitiMemory(GraphMemory):
                 config=OpenAIEmbedderConfig(
                     api_key="sk-local", base_url=settings.embedder_base_url
                 )
+            ),
+            # Sans cross_encoder explicite, Graphiti instancie un reranker OpenAI
+            # par défaut : crash au démarrage (OPENAI_API_KEY absente) et appels
+            # sortants vers api.openai.com — on le pointe sur le LLM local.
+            cross_encoder=OpenAIRerankerClient(
+                config=LLMConfig(api_key="sk-local", base_url=settings.llm_base_url)
             ),
         )
 

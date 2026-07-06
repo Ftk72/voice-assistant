@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.26 /uv /uvx /bin/
 

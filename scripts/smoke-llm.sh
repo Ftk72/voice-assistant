@@ -75,11 +75,12 @@ EXTRACTION=$(curl -sf "$LLM_URL/v1/chat/completions" -H "Content-Type: applicati
   }
 }')
 
-echo "$EXTRACTION" | python3 - <<'PY'
+# La réponse passe en argument : un heredoc sur `python3 -` volerait le stdin du pipe.
+python3 - "$EXTRACTION" <<'PY'
 import json
 import sys
 
-reponse = json.load(sys.stdin)
+reponse = json.loads(sys.argv[1])
 contenu = reponse["choices"][0]["message"]["content"]
 
 # Le JSON parse-t-il ? (la grammaire de llama.cpp doit le garantir — sinon c'est rouge)

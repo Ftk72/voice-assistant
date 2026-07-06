@@ -24,19 +24,21 @@ echo "Dimension du vecteur : $DIMENSION (attendu : 1024 pour bge-m3)"
 
 echo
 echo "=== 3/3 Cohérence sémantique (similarité cosinus) ==="
-curl -sf "$EMBEDDER_URL/v1/embeddings" -H "Content-Type: application/json" -d '{
+# La réponse passe en argument : un heredoc sur `python3 -` volerait le stdin du pipe.
+TRIO=$(curl -sf "$EMBEDDER_URL/v1/embeddings" -H "Content-Type: application/json" -d '{
   "input": [
     "Léa va chez le dentiste mardi.",
     "Le rendez-vous dentaire de Léa est prévu mardi.",
     "La recette de la tarte aux pommes demande trois œufs."
   ],
   "model": "bge-m3"
-}' | python3 - <<'PY'
+}')
+python3 - "$TRIO" <<'PY'
 import json
 import math
 import sys
 
-donnees = json.load(sys.stdin)["data"]
+donnees = json.loads(sys.argv[1])["data"]
 vecteurs = [d["embedding"] for d in sorted(donnees, key=lambda d: d["index"])]
 
 
