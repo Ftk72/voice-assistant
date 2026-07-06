@@ -31,6 +31,10 @@ class GraphitiMemory(GraphMemory):
                 "graphiti-core n'est pas installé — lancer : uv sync --extra graphiti"
             ) from error
 
+        from app.graph.francais import forcer_extraction_en_francais
+
+        forcer_extraction_en_francais()
+
         self._graphiti = Graphiti(
             settings.neo4j_uri,
             settings.neo4j_user,
