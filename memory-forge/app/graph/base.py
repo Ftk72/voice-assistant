@@ -8,6 +8,9 @@ class GraphMemory(ABC):
     (et non sur l'API de Graphiti) : l'implémentation est interchangeable sans toucher
     à la Filter OpenWebUI ni au serveur MCP."""
 
+    async def initialize(self) -> None:  # noqa: B027 — hook volontairement no-op par défaut
+        """Préparation unique au démarrage (index, contraintes…) — no-op par défaut."""
+
     @abstractmethod
     async def add_episode(self, episode: EpisodeIn) -> None:
         """Extrait les faits de l'épisode et les intègre au graphe (résolution d'entités,

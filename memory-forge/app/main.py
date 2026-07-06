@@ -57,6 +57,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        await app.state.graph.initialize()
         tasks = [asyncio.create_task(extraction_worker(app.state.queue, app.state.graph))]
         if settings.documents_dir is not None:
             watcher = DocumentWatcher(settings.documents_dir)

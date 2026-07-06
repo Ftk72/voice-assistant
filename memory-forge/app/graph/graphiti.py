@@ -5,6 +5,12 @@ from app.graph.base import GraphMemory
 from app.schemas import EpisodeIn, Fact, GraphEdge, GraphNeighborhood, Provenance
 
 
+def _en_datetime(valeur):
+    """Le driver Neo4j renvoie des `neo4j.time.DateTime`, que pydantic refuse :
+    conversion vers le datetime natif (constaté au premier lancement réel, 2026-07-06)."""
+    return valeur.to_native() if hasattr(valeur, "to_native") else valeur
+
+
 class GraphitiMemory(GraphMemory):
     """Adaptateur Graphiti + Neo4j (ADR 0005).
 
@@ -44,6 +50,11 @@ class GraphitiMemory(GraphMemory):
                 config=LLMConfig(api_key="sk-local", base_url=settings.llm_base_url)
             ),
         )
+
+    async def initialize(self) -> None:
+        """Crée les index et contraintes Neo4j de Graphiti (idempotent) — sans quoi
+        chaque recherche échoue sur l'index fulltext `edge_name_and_fact` manquant."""
+        await self._graphiti.build_indices_and_constraints()
 
     async def add_episode(self, episode: EpisodeIn) -> None:
         from graphiti_core.nodes import EpisodeType
@@ -111,8 +122,8 @@ class GraphitiMemory(GraphMemory):
                             else "conversation",
                             name=prov_name or source_description,
                         ),
-                        valid_at=record["valid_at"],
-                        invalid_at=record["invalid_at"],
+                        valid_at=_en_datetime(record["valid_at"]),
+                        invalid_at=_en_datetime(record["invalid_at"]),
                     )
                 )
             frontier = reached - visited
