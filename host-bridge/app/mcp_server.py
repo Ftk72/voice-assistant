@@ -1,4 +1,5 @@
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from app.actions.base import ActionRunner
 from app.catalog import Action
@@ -8,7 +9,24 @@ def build_mcp(catalog: dict[str, Action], runner: ActionRunner) -> FastMCP:
     """Outils MCP consommés par le client natif d'OpenWebUI (phase 4).
     Le Pont n'expose que la liste blanche : jamais un shell, jamais de commande
     arbitraire (ADR 0008)."""
-    mcp = FastMCP("host-bridge", stateless_http=True, streamable_http_path="/")
+    mcp = FastMCP(
+        "host-bridge",
+        stateless_http=True,
+        streamable_http_path="/",
+        # La protection anti-DNS-rebinding du SDK n'accepte que localhost par défaut :
+        # OpenWebUI arrive du réseau Docker avec Host « host.docker.internal:8500 » → 421.
+        # On garde la protection (port publié sur 127.0.0.1) mais avec les hôtes légitimes.
+        # Note : ce service tourne HORS Docker ; les conteneurs le joignent via
+        # host.docker.internal.
+        transport_security=TransportSecuritySettings(
+            allowed_hosts=[
+                "host.docker.internal:8500",
+                "127.0.0.1:8500",
+                "localhost:8500",
+                "testserver",
+            ]
+        ),
+    )
 
     @mcp.tool(
         description=(

@@ -1,11 +1,22 @@
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from app.graph.base import GraphMemory
 
 
 def build_mcp(graph: GraphMemory) -> FastMCP:
     """Outils MCP consommés par le client natif d'OpenWebUI (recall/forget, ADR 0005)."""
-    mcp = FastMCP("memory-forge", stateless_http=True, streamable_http_path="/")
+    mcp = FastMCP(
+        "memory-forge",
+        stateless_http=True,
+        streamable_http_path="/",
+        # La protection anti-DNS-rebinding du SDK n'accepte que localhost par défaut :
+        # OpenWebUI arrive du réseau Docker avec Host « memory:8200 » → 421. On garde
+        # la protection (port publié sur 127.0.0.1) mais avec les hôtes légitimes.
+        transport_security=TransportSecuritySettings(
+            allowed_hosts=["memory:8200", "127.0.0.1:8200", "localhost:8200", "testserver"]
+        ),
+    )
 
     @mcp.tool(
         description=(

@@ -1,11 +1,22 @@
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from app.world.base import WorldGateway
 
 
 def build_mcp(world: WorldGateway) -> FastMCP:
     """Outils MCP consommés par le client natif d'OpenWebUI (phase 6, ADR 0007)."""
-    mcp = FastMCP("world-forge", stateless_http=True, streamable_http_path="/")
+    mcp = FastMCP(
+        "world-forge",
+        stateless_http=True,
+        streamable_http_path="/",
+        # La protection anti-DNS-rebinding du SDK n'accepte que localhost par défaut :
+        # OpenWebUI arrive du réseau Docker avec Host « world:8300 » → 421. On garde
+        # la protection (port publié sur 127.0.0.1) mais avec les hôtes légitimes.
+        transport_security=TransportSecuritySettings(
+            allowed_hosts=["world:8300", "127.0.0.1:8300", "localhost:8300", "testserver"]
+        ),
+    )
 
     @mcp.tool(
         description=(

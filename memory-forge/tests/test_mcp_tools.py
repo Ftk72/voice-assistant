@@ -50,3 +50,28 @@ def test_l_endpoint_mcp_est_monte(client):
     # Sans la poignée de main MCP le serveur refuse la requête,
     # mais la route doit exister (≠ 404).
     assert client.post("/mcp", json={}).status_code != 404
+
+
+def test_l_endpoint_mcp_accepte_le_host_du_reseau_docker(client):
+    # La protection anti-DNS-rebinding du SDK MCP n'accepte par défaut que
+    # localhost/127.0.0.1 : depuis le réseau Docker, OpenWebUI arrive avec
+    # Host « memory:8200 » et prenait un 421 Misdirected Request (2026-07-06).
+    response = client.post(
+        "/mcp/",
+        headers={
+            "Host": "memory:8200",
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        },
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-03-26",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "1"},
+            },
+        },
+    )
+    assert response.status_code == 200
