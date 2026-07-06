@@ -11,6 +11,19 @@ def _en_datetime(valeur):
     return valeur.to_native() if hasattr(valeur, "to_native") else valeur
 
 
+def _provenance_depuis_description(description: str | None) -> Provenance:
+    """Parse le `source_description` (« source:nom ») écrit par `add_episode` sur les
+    nœuds `Episodic` en `Provenance`. Repli sur « conversation:inconnue » si absent ou
+    vide, et sur la source « conversation » si la source annoncée n'est pas reconnue
+    (garde-fou : un `Literal` pydantic ne doit jamais recevoir une valeur hors énum)."""
+    description = description or "conversation:inconnue"
+    prov_source, _, prov_name = description.partition(":")
+    return Provenance(
+        source=prov_source if prov_source in ("conversation", "document") else "conversation",
+        name=prov_name or description,
+    )
+
+
 class GraphitiMemory(GraphMemory):
     """Adaptateur Graphiti + Neo4j (ADR 0005).
 
@@ -73,17 +86,37 @@ class GraphitiMemory(GraphMemory):
 
     async def search(self, query: str) -> list[Fact]:
         edges = await self._graphiti.search(query)
-        return [
-            Fact(
-                text=edge.fact,
-                # La provenance fine (nom d'épisode) demande une passe de plus ;
-                # on renvoie la description de source au premier niveau.
-                provenance=Provenance(source="conversation", name=edge.source_node_uuid),
-                valid_at=edge.valid_at,
-                invalid_at=edge.invalid_at,
+
+        # Provenance fine : on lit le `source_description` du premier épisode de
+        # chaque arête (même convention que `neighborhood()`), via une seule requête
+        # Cypher groupée plutôt qu'une par fait.
+        episode_uuids = {
+            edge.episodes[0] for edge in edges if getattr(edge, "episodes", None)
+        }
+        descriptions: dict[str, str | None] = {}
+        if episode_uuids:
+            records, _, _ = await self._graphiti.driver.execute_query(
+                """
+                MATCH (ep:Episodic) WHERE ep.uuid IN $uuids
+                RETURN ep.uuid AS uuid, ep.source_description AS source_description
+                """,
+                uuids=sorted(episode_uuids),
             )
-            for edge in edges
-        ]
+            descriptions = {record["uuid"]: record["source_description"] for record in records}
+
+        facts = []
+        for edge in edges:
+            episode_uuid = edge.episodes[0] if getattr(edge, "episodes", None) else None
+            description = descriptions.get(episode_uuid) if episode_uuid else None
+            facts.append(
+                Fact(
+                    text=edge.fact,
+                    provenance=_provenance_depuis_description(description),
+                    valid_at=edge.valid_at,
+                    invalid_at=edge.invalid_at,
+                )
+            )
+        return facts
 
     async def neighborhood(self, entity: str, depth: int = 1) -> GraphNeighborhood:
         """Extension de proche en proche : une requête Cypher à un saut par niveau.
@@ -114,18 +147,12 @@ class GraphitiMemory(GraphMemory):
                 if record["uuid"] in seen_edges:
                     continue
                 seen_edges.add(record["uuid"])
-                source_description = record["source_description"] or "conversation:inconnue"
-                prov_source, _, prov_name = source_description.partition(":")
                 edges.append(
                     GraphEdge(
                         source=record["source"],
                         target=record["target"],
                         text=record["text"],
-                        provenance=Provenance(
-                            source=prov_source if prov_source in ("conversation", "document")
-                            else "conversation",
-                            name=prov_name or source_description,
-                        ),
+                        provenance=_provenance_depuis_description(record["source_description"]),
                         valid_at=_en_datetime(record["valid_at"]),
                         invalid_at=_en_datetime(record["invalid_at"]),
                     )
