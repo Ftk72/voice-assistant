@@ -79,21 +79,26 @@ services:
     restart: unless-stopped
 
   stt:
-    # Voxtral Mini GGUF (~3 Go VRAM, ADR 0001) — /v1/audio/transcriptions
-    # tag « server-cuda » figé par digest (image déjà tirée le 2026-07-06).
-    image: ghcr.io/ggml-org/llama.cpp@sha256:c52d27d6c81fa224711ab8fd9cf415fd824bd1eeefb380bf920abaa54bebb752
+    # Whisper large-v3-turbo via whisper.cpp (~1 Go VRAM) — remplace Voxtral
+    # (écart à l'ADR 0001, 2026-07-07) : le mode [TRANSCRIBE] de Voxtral n'existe
+    # pas dans llama.cpp et le modèle « répond » à la parole au lieu de la
+    # transcrire (voir docs/impasses.md). Image compilée localement pour sm_120
+    # (stt/Dockerfile) ; --inference-path rend l'API compatible OpenAI ;
+    # --convert accepte le mp3 envoyé par OpenWebUI.
+    build: ./stt
     command: >-
-      -m /models/voxtral-mini-q4_k_m.gguf
-      --mmproj /models/voxtral-mini-mmproj.gguf
+      --model /models/ggml-large-v3-turbo-q5_0.bin
       --host 0.0.0.0 --port 8080
-      -ngl 999
+      --inference-path /v1/audio/transcriptions
+      --convert
+      -l fr
     <<: *gpu
     volumes:
       - ./models/stt:/models:ro
     ports:
       - "127.0.0.1:8002:8080"   # accès direct pour debug uniquement
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 10s
       timeout: 5s
       retries: 30

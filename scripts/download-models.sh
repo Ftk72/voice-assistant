@@ -23,16 +23,15 @@ else
   mv -f models/llm/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf models/llm/qwen3.6-35b-a3b-q4_k_m.gguf
 fi
 
-echo "=== 2/4 STT : Voxtral Mini GGUF + mmproj (~3 Go) ==="
-if [ -f models/stt/voxtral-mini-q4_k_m.gguf ] && [ -f models/stt/voxtral-mini-mmproj.gguf ]; then
-  echo "déjà présents — sauté"
+echo "=== 2/4 STT : Whisper large-v3-turbo Q5_0 (~570 Mo) ==="
+# Remplace Voxtral (2026-07-07, écart à l'ADR 0001 — voir docs/impasses.md :
+# le mode [TRANSCRIBE] n'existe pas dans llama.cpp, le modèle « répondait »
+# à la parole). Servi par whisper.cpp compilé sm_120 (stt/Dockerfile).
+if [ -f models/stt/ggml-large-v3-turbo-q5_0.bin ]; then
+  echo "déjà présent — sauté"
 else
-  # Noms vérifiés le 2026-07-05 (inchangés dans le dépôt ggml-org)
-  hf download ggml-org/Voxtral-Mini-3B-2507-GGUF \
-    "Voxtral-Mini-3B-2507-Q4_K_M.gguf" "mmproj-Voxtral-Mini-3B-2507-Q8_0.gguf" \
-    --local-dir models/stt
-  mv -f models/stt/Voxtral-Mini-3B-2507-Q4_K_M.gguf models/stt/voxtral-mini-q4_k_m.gguf
-  mv -f models/stt/mmproj-Voxtral-Mini-3B-2507-Q8_0.gguf models/stt/voxtral-mini-mmproj.gguf
+  # Dépôt vérifié le 2026-07-07 : ggerganov/whisper.cpp (pas ggml-org)
+  hf download ggerganov/whisper.cpp "ggml-large-v3-turbo-q5_0.bin" --local-dir models/stt
 fi
 
 echo "=== 3/4 TTS : poids Chatterbox pour le pipeline anglais (~1,1 Go) ==="

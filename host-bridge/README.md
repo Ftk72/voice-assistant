@@ -50,8 +50,14 @@ toucher au bureau ni aux enceintes.
 - Player : `fake` (défaut) · `auto` (`HOST_BRIDGE_PLAYER=auto`, `winsound` sous
   Windows, `aplay` sous Linux).
 
-Les adaptateurs réels (`SubprocessRunner`, `SystemPlayer`) sont **jamais exécutés
-à ce jour** (pattern GraphitiMemory) : à valider au premier lancement sur l'hôte.
+`SystemPlayer` (branche Linux/aplay, WSLg → enceintes Windows) est **validé en
+réel le 2026-07-07** (chaîne Voice Forge → `/play` → enceintes). Prérequis dans
+WSL, installés une fois à la main : `pulseaudio-utils alsa-utils
+libasound2-plugins` et un `/etc/asound.conf` routant ALSA vers Pulse
+(`pcm.!default { type pulse }`). Le lancement au boot est assuré par
+`scripts/demarrage-hote.sh`. `SubprocessRunner` reste **jamais exécuté à ce
+jour** (pattern GraphitiMemory) : à valider au premier usage d'une action du
+catalogue.
 
 ## Dev
 
