@@ -44,13 +44,13 @@ Glossaire du domaine. Uniquement le vocabulaire — aucun détail d'implémentat
 
 **Memory Forge** — Le second composant sur mesure : service de mémoire persistante en graphe. Alimente l'assistant en souvenirs et connaissances ; l'orchestrateur de dialogue le consomme (injection et extraction directes, recall/oubli comme outils).
 
-**Entité** — Un nœud nommé du graphe (personne, lieu, projet…). Une même entité relie les faits issus des conversations et ceux issus des documents.
+**Entité** — Un nœud nommé du graphe. Ses catégories sont déclarées (ADR 0011) : personne, lieu, activité, organisation, animal, bien, projet, aliment. Une même entité relie les faits issus des conversations et ceux issus des documents.
 
 **Fait** — Une relation entre entités, portant sa provenance et sa période de validité. Un fait contredit devient obsolète : il cesse d'être utilisé mais reste dans l'historique du graphe.
 
-**Épisode** — L'unité d'ingestion de la mémoire : un échange de conversation daté, ou un fragment de document.
+**Épisode** — L'unité d'ingestion de la mémoire : les tours de l'**utilisateur** d'une conversation (l'assistant ne fait pas foi — ADR 0011), capturés à la **fermeture** de la conversation ; ou un fragment de document. Une conversation sous persona off-record ne produit aucun épisode.
 
-**Provenance** — L'origine d'un fait : conversation (datée) ou document (nommé). Toujours conservée, filtrable dans la visualisation.
+**Provenance** — L'origine d'un fait : conversation (datée — identifiée par la conversation, non par le persona) ou document (nommé). Toujours conservée, filtrable dans la visualisation.
 
 **Injection** — L'apport ambiant de faits pertinents dans le contexte du LLM avant chaque génération, sans intervention de l'utilisateur.
 
