@@ -1,6 +1,8 @@
 # ADR 0003 — Administration des voix hors du frontend OpenWebUI (zéro fork)
 
-Date : 2026-07-02 · Statut : accepté
+Date : 2026-07-02 · Statut : **remplacé par l'ADR 0009** (2026-07-07 — sortie
+complète d'OpenWebUI ; le principe « les mini-UI appartiennent aux forges »
+survit et devient même la règle des modules d'interface)
 
 ## Contexte
 

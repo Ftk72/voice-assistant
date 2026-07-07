@@ -4,29 +4,41 @@ Glossaire du domaine. Uniquement le vocabulaire — aucun détail d'implémentat
 
 ## Termes
 
-**Assistant vocal** — Le système complet : OpenWebUI (interface + conversations) + moteurs locaux (LLM, STT, TTS). Souverain (voir ce terme).
+**Assistant vocal** — Le système complet : la coquille (interface), l'orchestrateur de dialogue et les moteurs locaux (LLM, STT, TTS). Souverain (voir ce terme).
 
 **Souveraineté** — La contrainte fondatrice du système : les modèles (LLM, STT, TTS) et les données personnelles (mémoire, conversations, agenda) restent en local ; aucun service d'IA cloud. Des requêtes sortantes anonymes (météo, recherche web) sont permises.
 
-**Voice Forge** — Le seul composant développé sur mesure : backend FastAPI exposant une API TTS compatible OpenAI et le Voice Manager. OpenWebUI le consomme comme un fournisseur TTS externe.
+**Voice Forge** — Le composant sur mesure de la synthèse vocale : API TTS compatible OpenAI et Voice Manager. Consommé par le transport voix et par l'annonceur.
 
-**Voix** — Une identité vocale nommée (ex. « Emma », « Batman »), matérialisée par un échantillon de référence (`speaker.wav`) et ses métadonnées. Sélectionnable instantanément depuis OpenWebUI.
+**Voix** — Une identité vocale nommée (ex. « Emma », « Batman »), matérialisée par un échantillon de référence (`speaker.wav`) et ses métadonnées. Sélectionnable instantanément depuis l'interface.
 
-**Persona** — Un modèle OpenWebUI (au sens `model.info.meta`) associant un prompt système « voice-first » (réponses orales, courtes, sans mise en forme) et une voix par défaut (`meta.tts.voice`). Ex. : le persona « Batman » parle avec la voix « Batman ».
+**Persona** — L'association d'un prompt système « voice-first » (réponses orales, courtes, sans mise en forme) et d'une voix par défaut, tenue par l'orchestrateur de dialogue. Ex. : le persona « Batman » parle avec la voix « Batman ».
 
-**Preset audio** — Un des deux réglages d'usage documentés : « casque » (interruption de l'assistant activée) ou « haut-parleurs » (interruption désactivée). Réglage natif OpenWebUI, basculable en un clic.
+**Preset audio** — Un des deux réglages d'usage documentés : « casque » (interruption de l'assistant activée) ou « haut-parleurs » (interruption désactivée). Basculable en un clic.
 
 **Voice Manager** — Sous-système du Voice Forge : import, clonage, activation, aperçu et suppression des voix.
 
-**Provider TTS** — Implémentation interchangeable d'un moteur de synthèse derrière `BaseTTSProvider`. Changer de provider ne modifie jamais OpenWebUI.
+**Provider TTS** — Implémentation interchangeable d'un moteur de synthèse derrière `BaseTTSProvider`. Changer de provider ne modifie jamais le reste du système.
 
-**Moteur STT** — Voxtral Mini, servi en local, consommé par OpenWebUI via son moteur STT « openai » (endpoint compatible `/audio/transcriptions`).
+**Moteur STT** — Le transcripteur de la parole, servi en local derrière un endpoint compatible `/audio/transcriptions`.
 
-**Mode appel** — La conversation vocale continue native d'OpenWebUI (CallOverlay) : VAD, transcription, synthèse en streaming, interruption de l'assistant.
+**Conversation** — L'échange vocal continu avec l'assistant : mot d'éveil ou déclenchement manuel, tours de parole détectés, transcription, réponse streamée phrase par phrase, interruption possible de l'assistant. (Remplace le terme « mode appel ».)
+
+## Termes — Architecture modulaire (ADR 0009)
+
+**Orchestrateur de dialogue (Dialogue Forge)** — Le cerveau conversationnel : il tient l'historique, injecte la mémoire avant chaque tour et fait extraire après, route les appels d'outils vers les forges, applique le persona. Aucune interface : il sert le dialogue, la coquille l'affiche.
+
+**Transport voix** — La couche temps réel de la conversation : mot d'éveil, détection de parole, tours, interruption, acheminement de l'audio entre la coquille et les moteurs. Sans logique métier.
+
+**Coquille** — L'application de bureau native de l'assistant : elle est la carte son de la conversation (micro et haut-parleurs) et assemble les modules d'interface. Elle ne contient aucune logique métier.
+
+**Module d'interface** — Une vue de la coquille servie par le forge qui en est propriétaire (dialogue, graphe de mémoire, voix, agenda). Un module évolue avec son forge, jamais avec la coquille.
+
+**Mot d'éveil** — Le déclencheur vocal de la conversation (« dis … »), détecté en continu par le transport voix, sans que rien ne quitte la machine.
 
 ## Termes — Mémoire (phase 2)
 
-**Memory Forge** — Le second composant sur mesure : service de mémoire persistante en graphe. Alimente l'assistant en souvenirs et connaissances ; OpenWebUI le consomme via ses mécanismes natifs (Filter, MCP).
+**Memory Forge** — Le second composant sur mesure : service de mémoire persistante en graphe. Alimente l'assistant en souvenirs et connaissances ; l'orchestrateur de dialogue le consomme (injection et extraction directes, recall/oubli comme outils).
 
 **Entité** — Un nœud nommé du graphe (personne, lieu, projet…). Une même entité relie les faits issus des conversations et ceux issus des documents.
 
@@ -48,7 +60,7 @@ Glossaire du domaine. Uniquement le vocabulaire — aucun détail d'implémentat
 
 **Annonceur** — Le canal de parole spontanée de l'assistant : il fait entendre une annonce vocale (voix du Voice Forge) sur les enceintes, sans conversation en cours. L'assistant ne parle jamais spontanément autrement.
 
-**Annonce** — Un message parlé par l'annonceur (échéance d'un minuteur, rappel), doublé d'une notification visuelle dans OpenWebUI.
+**Annonce** — Un message parlé par l'annonceur (échéance d'un minuteur, rappel), doublé d'une notification visuelle dans la coquille.
 
 **Rappel** — Un événement d'agenda créé à la voix (« rappelle-moi mercredi de… ») dont la raison d'être est son annonce à l'échéance. Cas particulier d'événement, pas un mécanisme séparé.
 
