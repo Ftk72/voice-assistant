@@ -164,19 +164,6 @@ def test_lister_outils_n_est_appele_qu_une_fois_pour_deux_tours(client):
     assert client.app.state.outils.appels_lister_outils == 1
 
 
-def test_l_episode_est_capture_apres_le_tour(client):
-    client.app.state.llm.tours = [TourTexte("Avec plaisir.")]
-    identifiant = _nouvelle_conversation(client, persona="batman")
-
-    client.post(f"/conversations/{identifiant}/tours", json={"texte": "Bonsoir"})
-
-    episodes = client.app.state.memoire.episodes
-    assert len(episodes) == 1
-    assert episodes[0].nom == "Batman"
-    assert "Bonsoir" in episodes[0].contenu
-    assert "Avec plaisir." in episodes[0].contenu
-
-
 def test_la_boucle_d_outils_renvoie_le_resultat_au_llm(client):
     client.app.state.outils.definitions = [
         {"type": "function", "function": {"name": "meteo", "description": "Météo"}}

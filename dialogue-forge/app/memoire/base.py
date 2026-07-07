@@ -14,5 +14,7 @@ class MoteurMemoire(ABC):
 
     @abstractmethod
     async def capturer_episode(self, contenu: str, nom: str) -> None:
-        """Extraction : confie l'échange (`contenu`) à la mémoire pour intégration
-        différée. `nom` identifie l'épisode (ici le persona du tour)."""
+        """Extraction : confie les tours de l'utilisateur (`contenu`) à la mémoire
+        pour intégration différée, à la fermeture de la conversation. `nom`
+        identifie l'épisode par la conversation (datée), non par le persona
+        (ADR 0011)."""

@@ -1,7 +1,9 @@
 """Cœur du dialogue : l'orchestrateur d'un tour de conversation.
 
 Pour chaque tour : injection de la mémoire → construction des messages →
-boucle LLM/outils → diffusion phrase par phrase → extraction de l'épisode.
+boucle LLM/outils → diffusion phrase par phrase. L'extraction, elle, n'a plus
+lieu par tour : elle attend la fermeture de la conversation (`clore_conversation`)
+et ne mémorise que les tours de l'utilisateur (ADR 0011).
 
 Le message système reste **constant** d'un tour à l'autre (uniquement le
 prompt du persona) et la liste des outils n'est récupérée qu'une fois au
@@ -25,6 +27,31 @@ from app.personas import Persona
 from app.segmentation import SegmenteurPhrases
 
 PREFIXE_CONTEXTE_MEMOIRE = "[Contexte mémoire — à utiliser sans le lire à voix haute]"
+
+# Tours sans information neuve : on répond mais on ne les mémorise pas (ADR 0011).
+# Seul un tour réduit à l'un de ces mots isolés est écarté ; « oui exactement »
+# (plusieurs mots) est conservé.
+BACKCHANNELS = frozenset(
+    {
+        "oui",
+        "ouais",
+        "non",
+        "ok",
+        "okay",
+        "d'accord",
+        "merci",
+        "super",
+        "parfait",
+        "voilà",
+        "voila",
+        "bien",
+    }
+)
+
+
+def _est_backchannel(texte: str) -> bool:
+    normalise = texte.strip().lower().rstrip(" .!?…,")
+    return normalise in BACKCHANNELS
 
 # Bloc de consignes sur l'usage des outils, ajouté au prompt du persona.
 # Constant d'un tour à l'autre et d'un persona à l'autre : toute variation
@@ -151,9 +178,31 @@ class Orchestrateur:
         historique.append({"role": "user", "content": texte_utilisateur})
         historique.extend(messages[debut_boucle_outils:])
         historique.append({"role": "assistant", "content": reponse})
-        await self._memoire.capturer_episode(
-            contenu=f"Utilisateur : {texte_utilisateur}\n{persona.nom} : {reponse}",
-            nom=persona.nom,
-        )
 
         yield {"type": "fin", "reponse": reponse}
+
+    async def clore_conversation(
+        self, historique: list[Message], nom: str, off_record: bool = False
+    ) -> bool:
+        """Fin de conversation : capture un unique épisode à partir des tours de
+        l'**utilisateur** (l'assistant ne fait pas foi — ADR 0011). Écarte le
+        message de contexte mémoire (rôle `user` mais injecté par nous) et les
+        backchannels. Ne capture rien pour un persona off-record ou une
+        conversation sans contenu utile. `nom` identifie l'épisode par la
+        conversation (datée), non par le persona. Renvoie True si un épisode a
+        été confié à la mémoire."""
+        if off_record:
+            return False
+        tours = [
+            m["content"]
+            for m in historique
+            if m["role"] == "user"
+            and m["content"]
+            and not m["content"].startswith(PREFIXE_CONTEXTE_MEMOIRE)
+            and not _est_backchannel(m["content"])
+        ]
+        if not tours:
+            return False
+        contenu = "\n".join(f"Utilisateur : {tour}" for tour in tours)
+        await self._memoire.capturer_episode(contenu=contenu, nom=nom)
+        return True

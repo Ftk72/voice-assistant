@@ -63,3 +63,21 @@ async def jouer_tour(identifiant: str, corps: TourIn, request: Request) -> Strea
             yield json.dumps(evenement, ensure_ascii=False) + "\n"
 
     return StreamingResponse(flux(), media_type="application/x-ndjson")
+
+
+@router.post("/conversations/{identifiant}/clore")
+async def clore_conversation(identifiant: str, request: Request) -> dict[str, bool]:
+    """Ferme la conversation : capture l'épisode (tours utilisateur uniquement,
+    ADR 0011) puis retire la conversation de l'état. En attendant qu'A2 (transport
+    voix) appelle cette route à la mise en veille, c'est le déclencheur explicite."""
+    conversation = request.app.state.conversations.get(identifiant)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation inconnue")
+
+    orchestrateur = request.app.state.orchestrateur
+    persona = request.app.state.personas[conversation["cle_persona"]]
+    capture = await orchestrateur.clore_conversation(
+        conversation["historique"], nom=identifiant, off_record=persona.off_record
+    )
+    del request.app.state.conversations[identifiant]
+    return {"episode_capture": capture}

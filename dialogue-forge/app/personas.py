@@ -1,7 +1,9 @@
 """Chargement des personas au format existant du dépôt (voir personas/README.md).
 
 Un persona est un fichier `*.md` (hors README) dont :
-- le titre `# Nom (voix : X)` donne le nom et la voix,
+- le titre `# Nom (voix : X)` donne le nom et la voix, avec un jeton optionnel
+  `, off-record` après la voix (`# Nom (voix : X, off-record)`) qui marque un
+  persona dont les conversations ne sont jamais mémorisées (ADR 0011),
 - le premier bloc de code clôturé (``` … ```) donne le prompt système.
 
 Un fichier mal formé (titre ou bloc absent) est ignoré proprement.
@@ -11,7 +13,13 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-_TITRE = re.compile(r"^#\s*(?P<nom>.+?)\s*\(\s*voix\s*:\s*(?P<voix>.+?)\s*\)\s*$", re.MULTILINE)
+# La voix s'arrête à la virgule (ou à la parenthèse) : le jeton « off-record »
+# vient éventuellement après, sans polluer le nom de la voix.
+_TITRE = re.compile(
+    r"^#\s*(?P<nom>.+?)\s*\(\s*voix\s*:\s*(?P<voix>[^,)]+?)\s*"
+    r"(?P<offrecord>,\s*off-record)?\s*\)\s*$",
+    re.MULTILINE,
+)
 _BLOC_CODE = re.compile(r"```[^\n]*\n(?P<corps>.*?)```", re.DOTALL)
 
 
@@ -20,6 +28,7 @@ class Persona:
     nom: str
     voix: str
     prompt: str
+    off_record: bool = False
 
 
 def _analyser(texte: str) -> Persona | None:
@@ -30,7 +39,12 @@ def _analyser(texte: str) -> Persona | None:
     prompt = bloc.group("corps").strip()
     if not prompt:
         return None
-    return Persona(nom=titre.group("nom").strip(), voix=titre.group("voix").strip(), prompt=prompt)
+    return Persona(
+        nom=titre.group("nom").strip(),
+        voix=titre.group("voix").strip(),
+        prompt=prompt,
+        off_record=titre.group("offrecord") is not None,
+    )
 
 
 def charger_personas(dossier: Path) -> dict[str, Persona]:
