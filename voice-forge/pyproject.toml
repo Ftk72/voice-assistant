@@ -17,6 +17,13 @@ dependencies = [
 chatterbox = [
     "chatterbox-tts>=0.1",
 ]
+# Successeur pressenti de Chatterbox (latence — révision d'ADR 0002 à acter).
+# NB : le paquet épingle transformers==4.57.3, ce qui rétrograde le lock entier
+# (Chatterbox n'épingle pas transformers : cohabitation possible, à re-valider
+# par smoke-test) et tire gradio/onnxruntime/sox (~0,5 Go de roues).
+qwen3tts = [
+    "qwen-tts>=0.1.1",
+]
 
 [dependency-groups]
 dev = [
@@ -27,6 +34,10 @@ dev = [
 ]
 
 [tool.uv]
+# chatterbox-tts épingle transformers==5.2.0, qwen-tts ==4.57.3 : inconciliables
+# dans une même résolution. Extras déclarés conflictuels → chaque image Docker
+# n'installe que l'un des deux (ARG TTS_EXTRA du Dockerfile).
+conflicts = [[{ extra = "chatterbox" }, { extra = "qwen3tts" }]]
 # Force des versions de numba/llvmlite avec roues cp312. Sans cette borne, uv
 # conserve numba 0.53.1 (tiré par librosa via chatterbox-tts) : son plafond
 # Python < 3.10 est dynamique dans setup.py, donc invisible à la résolution — la

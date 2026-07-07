@@ -24,6 +24,22 @@ def test_chatterbox_recoit_le_repertoire_local_des_settings(tmp_path):
     assert provider.chatterbox_dir == chatterbox_dir
 
 
+def test_qwen3tts_est_selectionnable_sans_charger_le_modele(tmp_path):
+    from app.providers.qwen3tts import Qwen3TTSProvider
+
+    provider = build_provider(Settings(provider="qwen3tts", cache_dir=tmp_path / "cache"))
+
+    # La construction ne doit ni importer qwen_tts ni toucher le GPU.
+    assert isinstance(provider.inner, Qwen3TTSProvider)
+
+
+def test_qwen3tts_recoit_le_repertoire_local_des_settings(tmp_path):
+    model_dir = tmp_path / "modele"
+    provider = build_provider(Settings(provider="qwen3tts", qwen3tts_dir=model_dir))
+
+    assert provider.model_dir == model_dir
+
+
 def test_le_cache_enveloppe_le_provider_si_cache_dir(tmp_path):
     from app.providers.cache import CachedProvider
 

@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     voices_dir: Path = Path("voices")
     host: str = "127.0.0.1"
     port: int = 8100
-    provider: Literal["fake", "chatterbox"] = "fake"
+    provider: Literal["fake", "chatterbox", "qwen3tts"] = "fake"
     cache_dir: Path | None = None
     chatterbox_dir: Path | None = None
+    qwen3tts_dir: Path | None = None

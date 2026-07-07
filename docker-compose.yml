@@ -106,7 +106,10 @@ services:
     restart: unless-stopped
 
   voice-forge:
-    # TTS + clonage de voix (Chatterbox, ~3 Go VRAM, ADR 0002) — seul code custom
+    # TTS + clonage de voix (Chatterbox, ~3 Go VRAM, ADR 0002) — seul code custom.
+    # Essai Qwen3-TTS (latence) : build --build-arg TTS_EXTRA=qwen3tts puis
+    # VOICE_FORGE_PROVIDER=qwen3tts — les deux moteurs ne cohabitent pas dans
+    # une même image (extras uv conflictuels, voir voice-forge/pyproject.toml).
     build: ./voice-forge
     <<: *gpu
     environment:
@@ -115,11 +118,13 @@ services:
       VOICE_FORGE_VOICES_DIR: /data/voices
       VOICE_FORGE_CACHE_DIR: /data/cache
       VOICE_FORGE_CHATTERBOX_DIR: /models/chatterbox
+      VOICE_FORGE_QWEN3TTS_DIR: /models/qwen3-tts/base
       HF_HOME: /data/hf-cache            # poids Chatterbox (pré-téléchargeables)
     volumes:
       - ./voices:/data/voices
       - ./models/hf-cache:/data/hf-cache
       - ./models/chatterbox:/models/chatterbox:ro
+      - ./models/qwen3-tts:/models/qwen3-tts:ro
       - voice-forge-cache:/data/cache
     ports:
       - "127.0.0.1:8100:8100"   # mini-page d'admin des voix : http://127.0.0.1:8100/admin
@@ -250,6 +255,9 @@ services:
       TIME_FORGE_SQLITE_PATH: /data/agenda.db
       TIME_FORGE_ANNOUNCER: hostbridge
       TIME_FORGE_VOICE_FORGE_URL: http://voice-forge:8100
+      # Voix des annonces — doit exister dans le Voice Forge (sinon 400
+      # « Voix inconnue » silencieux). À changer à l'enrôlement de la vraie voix.
+      TIME_FORGE_ANNOUNCE_VOICE: VoixDeTest
       TIME_FORGE_HOST_BRIDGE_URL: http://host.docker.internal:8500
       # Jeton partagé du Pont hôte — même valeur que HOST_BRIDGE_TOKEN au
       # lancement du Pont (fichier .env non versionné).
