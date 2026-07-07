@@ -12,7 +12,7 @@ Glossaire du domaine. Uniquement le vocabulaire — aucun détail d'implémentat
 
 **Voix** — Une identité vocale nommée (ex. « Emma », « Batman »), matérialisée par un échantillon de référence (`speaker.wav`) et ses métadonnées. Sélectionnable instantanément depuis l'interface.
 
-**Persona** — L'association d'un prompt système « voice-first » (réponses orales, courtes, sans mise en forme) et d'une voix par défaut, tenue par l'orchestrateur de dialogue. Ex. : le persona « Batman » parle avec la voix « Batman ».
+**Persona** — L'association d'un prompt système « voice-first » (réponses orales, courtes, sans mise en forme) et d'une voix par défaut, tenue par l'orchestrateur de dialogue. Ex. : le persona « Batman » parle avec la voix « Batman ». Une conversation est liée à un persona unique ; en changer démarre une nouvelle conversation. La voix, elle, est dérogeable à tout instant sans changer de persona (dérogation valable pour la conversation en cours).
 
 **Preset audio** — Un des deux réglages d'usage documentés : « casque » (interruption de l'assistant activée) ou « haut-parleurs » (interruption désactivée). Basculable en un clic.
 
@@ -35,6 +35,10 @@ Glossaire du domaine. Uniquement le vocabulaire — aucun détail d'implémentat
 **Module d'interface** — Une vue de la coquille servie par le forge qui en est propriétaire (dialogue, graphe de mémoire, voix, agenda). Un module évolue avec son forge, jamais avec la coquille.
 
 **Mot d'éveil** — Le déclencheur vocal de la conversation (« dis … »), détecté en continu par le transport voix, sans que rien ne quitte la machine.
+
+**Console** — La fenêtre principale de la coquille : les modules d'interface y sont assemblés en onglets (dialogue, mémoire, voix, agenda). Ouverte à la demande ; l'assistant vit sans elle.
+
+**Pastille** — La présence permanente de l'assistant à l'écran : un indicateur compact toujours visible (veille, écoute, parle), point de déclenchement manuel de la conversation et d'affichage des notifications d'annonces. C'est elle, pas la console, qui incarne « l'assistant est là ».
 
 ## Termes — Mémoire (phase 2)
 

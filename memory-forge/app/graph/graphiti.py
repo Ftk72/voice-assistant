@@ -3,7 +3,15 @@ from datetime import UTC, datetime
 from app.config import Settings
 from app.graph.base import GraphMemory
 from app.graph.ontologie import TYPES_D_ENTITES
-from app.schemas import EpisodeIn, Fact, GraphEdge, GraphNeighborhood, Provenance
+from app.schemas import (
+    EpisodeIn,
+    Fact,
+    GrapheComplet,
+    GraphEdge,
+    GraphNeighborhood,
+    NoeudGraphe,
+    Provenance,
+)
 
 
 def _en_datetime(valeur):
@@ -170,6 +178,60 @@ class GraphitiMemory(GraphMemory):
             if not frontier:
                 break
         return GraphNeighborhood(center=entity, nodes=sorted(nodes), edges=edges)
+
+    async def graphe_complet(self, limite: int = 500) -> GrapheComplet:
+        """⚠️ Jamais exécutée (comme le reste de l'adaptateur) : à valider au premier
+        lancement réel avec Neo4j peuplé. Deux requêtes Cypher : les nœuds les plus
+        connectés (degré décroissant) jusqu'à `limite`, puis les arêtes qui les relient
+        entre eux (même contrat que `neighborhood` — provenance et validité comprises,
+        faits obsolètes marqués, jamais omis)."""
+        total_records, _, _ = await self._graphiti.driver.execute_query(
+            "MATCH (n:Entity) RETURN count(n) AS total"
+        )
+        total = total_records[0]["total"] if total_records else 0
+
+        noeud_records, _, _ = await self._graphiti.driver.execute_query(
+            """
+            MATCH (n:Entity)
+            OPTIONAL MATCH (n)-[r:RELATES_TO]-()
+            WITH n, count(r) AS degre
+            ORDER BY degre DESC, n.name ASC
+            LIMIT $limite
+            RETURN n.name AS nom
+            """,
+            limite=limite,
+        )
+        noms = [record["nom"] for record in noeud_records]
+
+        arete_records, _, _ = await self._graphiti.driver.execute_query(
+            """
+            MATCH (a:Entity)-[r:RELATES_TO]-(b:Entity)
+            WHERE a.name IN $noms AND b.name IN $noms
+            OPTIONAL MATCH (ep:Episodic) WHERE ep.uuid IN r.episodes
+            RETURN a.name AS source, b.name AS target, r.uuid AS uuid,
+                   r.fact AS text, r.valid_at AS valid_at, r.invalid_at AS invalid_at,
+                   collect(ep.source_description)[0] AS source_description
+            """,
+            noms=noms,
+        )
+        aretes: list[GraphEdge] = []
+        vues: set[str] = set()
+        for record in arete_records:
+            if record["uuid"] in vues:
+                continue
+            vues.add(record["uuid"])
+            aretes.append(
+                GraphEdge(
+                    source=record["source"],
+                    target=record["target"],
+                    text=record["text"],
+                    provenance=_provenance_depuis_description(record["source_description"]),
+                    valid_at=_en_datetime(record["valid_at"]),
+                    invalid_at=_en_datetime(record["invalid_at"]),
+                )
+            )
+        noeuds = [NoeudGraphe(nom=nom) for nom in noms]
+        return GrapheComplet(noeuds=noeuds, aretes=aretes, tronque=total > limite)
 
     async def forget(self, entity: str) -> int:
         """Suppression réelle des nœuds dont le nom correspond, et de leurs relations."""

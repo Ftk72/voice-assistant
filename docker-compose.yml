@@ -158,12 +158,14 @@ services:
     restart: unless-stopped
 
   embedder:
-    # bge-m3 sur CPU (ADR 0005) — API embeddings compatible OpenAI
+    # Qwen3-Embedding-0.6B sur CPU (ADR 0009, remplace bge-m3) — API embeddings
+    # compatible OpenAI. « --pooling last » impératif : sans lui, llama-server
+    # renvoie des embeddings de tokens, pas de phrases (piège documenté).
     # tag « server » (CPU) figé par digest (image déjà tirée le 2026-07-06).
     image: ghcr.io/ggml-org/llama.cpp@sha256:ac8b800287d2f6cd2d200b7f718c14ee79cc810db2115b63d2f04284e499a98e
     command: >-
-      -m /models/bge-m3-q8_0.gguf
-      --embeddings
+      -m /models/Qwen3-Embedding-0.6B-Q8_0.gguf
+      --embeddings --pooling last
       --host 0.0.0.0 --port 8080
     volumes:
       - ./models/embedder:/models:ro
