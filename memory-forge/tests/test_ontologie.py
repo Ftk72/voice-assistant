@@ -33,6 +33,48 @@ class TestTypesDEntites:
         assert "pétanque" in description
         assert "natation" in description
 
+    def test_les_huit_types_de_l_adr_0011_sont_declares(self):
+        # ADR 0011 : le trio initial + cinq types de nœuds durables.
+        attendus = {
+            "Personne",
+            "Lieu",
+            "Activite",
+            "Organisation",
+            "Animal",
+            "Bien",
+            "Projet",
+            "Aliment",
+        }
+        assert attendus <= set(TYPES_D_ENTITES)
+
+    def test_organisation_est_distincte_d_un_lieu(self):
+        # ADR 0011 : le collectif humain, pas le bâtiment ni la ville.
+        description = TYPES_D_ENTITES["Organisation"].__doc__
+
+        assert "employeur" in description
+        assert "Lieu" in description
+
+    def test_animal_couvre_les_animaux_de_compagnie(self):
+        assert "compagnie" in TYPES_D_ENTITES["Animal"].__doc__
+
+    def test_bien_est_borne_par_le_test_de_duree(self):
+        # ADR 0011 : « encore là et important dans un an ? », pas les consommables.
+        description = TYPES_D_ENTITES["Bien"].__doc__
+
+        assert "an" in description
+        assert "consommable" in description
+
+    def test_projet_se_distingue_de_la_tache_d_agenda(self):
+        # ADR 0011 : projet durable = sans échéance datée (sinon, c'est l'agenda).
+        description = TYPES_D_ENTITES["Projet"].__doc__
+
+        assert "échéance" in description
+        assert "agenda" in description
+
+    def test_aliment_couvre_les_allergies(self):
+        # ADR 0011 : zone la plus fréquente et la plus sensible.
+        assert "allergie" in TYPES_D_ENTITES["Aliment"].__doc__
+
     def test_chaque_type_a_une_description_francaise_non_vide(self):
         for nom, modele in TYPES_D_ENTITES.items():
             assert modele.__doc__ and modele.__doc__.strip(), f"{nom} sans description"

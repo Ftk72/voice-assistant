@@ -38,8 +38,49 @@ class Lieu(BaseModel):
     parc…)."""
 
 
+class Organisation(BaseModel):
+    """Un collectif nommé auquel la personne appartient ou qu'elle fréquente
+    régulièrement : employeur, école, club, équipe, association (« Ubisoft »,
+    « le JC Lyon », « l'école de ma fille »). Distinct d'un Lieu : c'est le
+    groupe humain, pas le bâtiment ni la ville."""
+
+
+class Animal(BaseModel):
+    """Un animal de compagnie appartenant à quelqu'un ou lié à lui, nommé
+    (« Rex », « Minou ») ou désigné par son espèce (« mon chat »)."""
+
+
+class Bien(BaseModel):
+    """Une possession durable, individuelle et identifiable, dont on parle
+    comme d'une chose précise et unique : véhicule (« ma Clio »), logement
+    (« mon appartement »), instrument (« ma guitare »), matériel notable
+    (« mon vélo », « mon ordinateur »). PAS un consommable ni un objet
+    générique du quotidien (courses, vêtements, nourriture) : le test est
+    « existera-t-elle encore et comptera-t-elle dans un an ? »."""
+
+
+class Projet(BaseModel):
+    """Une entreprise ou un objectif que la personne poursuit dans la durée,
+    SANS échéance datée : apprendre une langue, écrire un livre, construire
+    quelque chose, un but de carrière (« j'apprends l'espagnol », « mon
+    assistant vocal »). PAS une tâche ponctuelle à faire pour une date
+    (« appeler le plombier mardi ») — ça, c'est l'agenda."""
+
+
+class Aliment(BaseModel):
+    """Un aliment, boisson ou ingrédient, cible d'un goût, d'une aversion ou
+    d'une allergie (« les noix », « le café serré », « les fruits de mer »).
+    Couvre la zone la plus fréquente et la plus sensible des préférences
+    (allergie alimentaire comprise)."""
+
+
 TYPES_D_ENTITES: dict[str, type[BaseModel]] = {
     "Activite": Activite,
     "Personne": Personne,
     "Lieu": Lieu,
+    "Organisation": Organisation,
+    "Animal": Animal,
+    "Bien": Bien,
+    "Projet": Projet,
+    "Aliment": Aliment,
 }
