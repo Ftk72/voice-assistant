@@ -1,0 +1,37 @@
+[project]
+name = "transport-voix"
+version = "0.1.0"
+description = "Couche transport voix (Pipecat/WebRTC) — relie la coquille (micro/haut-parleurs) aux moteurs STT/TTS et au Dialogue Forge (ADR 0012)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "httpx>=0.27",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "uvicorn>=0.32",
+]
+
+[project.optional-dependencies]
+# Extra volontairement séparé (dépendance lourde) — NE PAS installer ici.
+# Plus tard, lancé par l'utilisateur : uv sync --extra pipecat
+pipecat = ["pipecat-ai[webrtc,silero,openai,whisper]>=1.5,<1.6"]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
