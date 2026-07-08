@@ -283,6 +283,56 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # ---- Orchestrateur de dialogue (le « cerveau », ADR 0009) ----
+
+  dialogue:
+    build: ./dialogue-forge
+    environment:
+      DIALOGUE_FORGE_HOST: 0.0.0.0             # réseau Docker interne uniquement
+      DIALOGUE_FORGE_LLM_BACKEND: openai        # llama.cpp, API OpenAI-compat
+      DIALOGUE_FORGE_LLM_BASE_URL: http://llm:8080/v1
+      DIALOGUE_FORGE_MEMOIRE_BACKEND: rest
+      DIALOGUE_FORGE_MEMORY_FORGE_URL: http://memory:8200
+      DIALOGUE_FORGE_OUTILS_BACKEND: mcp
+      # Client MCP de time / world / memory (noms de services Docker).
+      DIALOGUE_FORGE_MCP_URLS: '["http://time:8400/mcp","http://world:8300/mcp","http://memory:8200/mcp"]'
+      DIALOGUE_FORGE_PERSONAS_DIR: /personas
+    volumes:
+      - ./personas:/personas:ro
+    ports:
+      - "127.0.0.1:8600:8600"
+    depends_on:
+      memory:
+        condition: service_healthy
+      world:
+        condition: service_healthy
+      time:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8600/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  # TURN/STUN local (souverain) — relais media WebRTC du transport voix.
+  # Le navigateur et Pipecat forcent le mode « relay » et passent par ce coturn,
+  # joignable en 127.0.0.1 via le proxy de ports de Docker Desktop (ce qui
+  # contourne aussi le pare-feu Hyper-V du pont WSL2↔Windows). Cf. ADR 0012 et
+  # docs/impasses.md (media WebRTC WSL2↔Windows).
+  coturn:
+    image: coturn/coturn:4.14
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+    # Réseau host : les adresses de relais de coturn sont de vraies adresses
+    # hôte (fini le NAT bridge 172.x et le mapping de ports). En WSL mirrored,
+    # l'hôte est partagé avec Windows → navigateur et Pipecat joignent les
+    # relais directement. Cf. docs/impasses.md (media WebRTC WSL2↔Windows).
+    network_mode: host
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    restart: unless-stopped
+
 volumes:
   open-webui-data:
   voice-forge-cache:
