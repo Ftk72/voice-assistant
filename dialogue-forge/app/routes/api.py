@@ -4,7 +4,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from app.schemas import ConversationVue, CreerConversation, PersonaRef, TourIn
+from app.schemas import ConversationVue, CreerConversation, Interruption, PersonaRef, TourIn
 
 router = APIRouter()
 
@@ -63,6 +63,22 @@ async def jouer_tour(identifiant: str, corps: TourIn, request: Request) -> Strea
             yield json.dumps(evenement, ensure_ascii=False) + "\n"
 
     return StreamingResponse(flux(), media_type="application/x-ndjson")
+
+
+@router.post("/conversations/{identifiant}/interrompre")
+def interrompre_conversation(
+    identifiant: str, corps: Interruption, request: Request
+) -> dict[str, bool]:
+    """Interruption (ADR 0012 décision 3) : le transport voix signale le préfixe
+    réellement prononcé ; on tronque le dernier tour assistant à ce préfixe. Sert
+    la cohérence *live* — la mémoire, elle, est immunisée (user-only, ADR 0011)."""
+    conversation = request.app.state.conversations.get(identifiant)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation inconnue")
+    tronque = request.app.state.orchestrateur.interrompre(
+        conversation["historique"], corps.prefixe
+    )
+    return {"tronque": tronque}
 
 
 @router.post("/conversations/{identifiant}/clore")

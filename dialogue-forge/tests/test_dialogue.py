@@ -33,6 +33,19 @@ def test_un_tour_simple_est_streame_phrase_par_phrase(client):
     assert fin["reponse"] == "Bonjour toi. Comment vas-tu ?"
 
 
+def test_le_stream_porte_la_voix_courante_du_persona(client):
+    # ADR 0012 décision 5 : le stream /tours annote chaque phrase de la voix
+    # courante, que le transport applique au TTS de ce tour.
+    client.app.state.llm.tours = [TourTexte("Grrr. Je suis la nuit.")]
+    identifiant = _nouvelle_conversation(client, persona="batman")
+
+    reponse = client.post(f"/conversations/{identifiant}/tours", json={"texte": "Qui es-tu ?"})
+    phrases = [ligne for ligne in _lignes(reponse) if ligne["type"] == "phrase"]
+
+    assert phrases
+    assert all(ligne["voix"] == "Batman" for ligne in phrases)
+
+
 def test_l_injection_place_les_faits_dans_un_message_utilisateur_de_contexte(client):
     client.app.state.memoire.faits = ["Le chat de l'utilisateur s'appelle Félix."]
     client.app.state.llm.tours = [TourTexte("Bien noté.")]

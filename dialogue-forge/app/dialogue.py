@@ -128,13 +128,13 @@ class Orchestrateur:
                 if isinstance(evenement, DeltaTexte):
                     contenu += evenement.texte
                     for phrase in segmenteur.absorber(evenement.texte):
-                        yield {"type": "phrase", "texte": phrase}
+                        yield {"type": "phrase", "texte": phrase, "voix": persona.voix}
                 else:
                     appels.append(evenement)
 
             if not appels:
                 for phrase in segmenteur.terminer():
-                    yield {"type": "phrase", "texte": phrase}
+                    yield {"type": "phrase", "texte": phrase, "voix": persona.voix}
                 reponse = contenu
                 break
 
@@ -180,6 +180,19 @@ class Orchestrateur:
         historique.append({"role": "assistant", "content": reponse})
 
         yield {"type": "fin", "reponse": reponse}
+
+    def interrompre(self, historique: list[Message], prefixe_prononce: str) -> bool:
+        """Interruption (ADR 0012 décision 3) : le transport sait combien de
+        phrases il a jouées et signale le préfixe réellement prononcé. On tronque
+        le **dernier tour assistant** à ce préfixe pour que le LLM ne référence
+        jamais l'inaudible au tour suivant — la cohérence *live*, pas le graphe
+        (la mémoire est user-only de toute façon, ADR 0011). Renvoie True si un
+        tour assistant a été tronqué."""
+        for message in reversed(historique):
+            if message["role"] == "assistant":
+                message["content"] = prefixe_prononce
+                return True
+        return False
 
     async def clore_conversation(
         self, historique: list[Message], nom: str, off_record: bool = False

@@ -115,6 +115,35 @@ def test_clore_une_conversation_inconnue_404(client):
     assert client.post("/conversations/inexistante/clore").status_code == 404
 
 
+# --- Interruption (ADR 0012 décision 3) ------------------------------------
+
+
+def test_l_interruption_tronque_le_dernier_tour_assistant_au_prefixe_prononce(client):
+    client.app.state.llm.tours = [TourTexte("Phrase une. Phrase deux. Phrase trois.")]
+    cid = client.post("/conversations", json={"persona": "batman"}).json()["id"]
+    _jouer(client, cid, "Raconte-moi tout.")
+
+    reponse = client.post(f"/conversations/{cid}/interrompre", json={"prefixe": "Phrase une."})
+    assert reponse.status_code == 200
+    assert reponse.json()["tronque"] is True
+
+    historique = client.get(f"/conversations/{cid}").json()["historique"]
+    dernier_assistant = [m for m in historique if m["role"] == "assistant"][-1]
+    assert dernier_assistant["content"] == "Phrase une."
+
+
+def test_l_interruption_sans_tour_assistant_ne_tronque_rien(client):
+    cid = client.post("/conversations", json={"persona": "batman"}).json()["id"]
+    reponse = client.post(f"/conversations/{cid}/interrompre", json={"prefixe": "quoi que ce soit"})
+    assert reponse.status_code == 200
+    assert reponse.json()["tronque"] is False
+
+
+def test_interrompre_une_conversation_inconnue_404(client):
+    reponse = client.post("/conversations/inexistante/interrompre", json={"prefixe": "x"})
+    assert reponse.status_code == 404
+
+
 def test_une_conversation_off_record_ne_capture_rien(personas_dir):
     (personas_dir / "fantome.md").write_text(
         "# Fantome (voix : Emma, off-record)\n\n```\nTu es discret.\n```\n",
