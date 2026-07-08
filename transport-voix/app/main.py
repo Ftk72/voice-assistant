@@ -70,5 +70,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.tts = tts
     app.state.dialogue = dialogue
     app.state.transport = transport
+    # Connexions WebRTC vivantes, indexées par pc_id (signaling SmallWebRTC).
+    app.state.webrtc_connexions = {}
     app.include_router(router)
     return app

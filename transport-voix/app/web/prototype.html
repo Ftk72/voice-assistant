@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prototype pont voix — Transport Voix</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto;
+             padding: 0 1rem; line-height: 1.5; }
+      button { font-size: 1.1rem; padding: 0.6rem 1.4rem; cursor: pointer; }
+      #etat { margin-top: 1rem; font-weight: 600; }
+      #journal { margin-top: 1rem; white-space: pre-wrap; font-family: monospace;
+                 font-size: 0.85rem; color: #555; border-top: 1px solid #ddd;
+                 padding-top: 0.6rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Prototype du pont voix</h1>
+    <p>
+      Outil de développement (ADR 0012, « bouton d'abord ») pour valider le pont
+      WebView2↔Pipecat : appuie, parle, écoute la réponse. Ce n'est
+      <em>pas</em> le module dialogue (front A4).
+    </p>
+    <button id="bouton">Parler</button>
+    <div id="etat">En veille.</div>
+    <audio id="audio" autoplay></audio>
+    <div id="journal"></div>
+
+    <script>
+      const bouton = document.getElementById("bouton");
+      const etat = document.getElementById("etat");
+      const audio = document.getElementById("audio");
+      const journal = document.getElementById("journal");
+      let pc = null;
+
+      function tracer(msg) {
+        journal.textContent += msg + "\n";
+      }
+
+      async function demarrer() {
+        bouton.disabled = true;
+        etat.textContent = "Connexion…";
+        // Force le relais par le coturn local : toute la media passe par lui,
+        // ce qui contourne les blocages NAT/pare-feu WSL2↔Windows (souverain,
+        // rien ne quitte la machine). Identifiants = config du transport.
+        pc = new RTCPeerConnection({
+          iceServers: [
+            { urls: "turn:127.0.0.1:3478", username: "voix", credential: "voixsecret" },
+          ],
+          iceTransportPolicy: "relay",
+        });
+
+        pc.ontrack = (e) => {
+          audio.srcObject = e.streams[0];
+          tracer("Piste audio reçue.");
+        };
+        pc.onconnectionstatechange = () => {
+          etat.textContent = "État : " + pc.connectionState;
+          tracer("connectionState = " + pc.connectionState);
+        };
+
+        // Canal de données pour les événements RTVI (transcriptions, phrases).
+        pc.createDataChannel("pipecat");
+
+        // Micro (getUserMedia — AEC/NS/AGC du navigateur gratuits, ADR 0010).
+        // addTrack crée un transceiver **sendrecv** : il envoie le micro ET
+        // reçoit l'audio de l'assistant sur la même piste. NE PAS ajouter de
+        // transceiver « audio » supplémentaire, sinon Pipecat lit la piste vide
+        // (silence) et coupe la réception après ~3 s d'inactivité.
+        const flux = await navigator.mediaDevices.getUserMedia({ audio: true });
+        flux.getTracks().forEach((t) => pc.addTrack(t, flux));
+
+        const offre = await pc.createOffer();
+        await pc.setLocalDescription(offre);
+
+        const reponse = await fetch("/offer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sdp: offre.sdp, type: offre.type }),
+        });
+        if (!reponse.ok) {
+          etat.textContent = "Échec /offer : " + reponse.status;
+          tracer(await reponse.text());
+          bouton.disabled = false;
+          return;
+        }
+        const answer = await reponse.json();
+        await pc.setRemoteDescription(answer);
+        tracer("Réponse SDP appliquée (pc_id=" + answer.pc_id + ").");
+        etat.textContent = "En conversation.";
+        bouton.textContent = "Raccrocher";
+        bouton.disabled = false;
+        bouton.onclick = raccrocher;
+      }
+
+      function raccrocher() {
+        if (pc) {
+          pc.close();
+          pc = null;
+        }
+        etat.textContent = "En veille.";
+        bouton.textContent = "Parler";
+        bouton.onclick = demarrer;
+      }
+
+      bouton.onclick = demarrer;
+    </script>
+  </body>
+</html>

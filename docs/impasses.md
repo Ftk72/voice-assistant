@@ -5,6 +5,15 @@
 > supprimée : elle est marquée comme telle et redevient une prémisse à re-vérifier (`/premisses`).
 > Les contraintes permanentes (sans condition de validité) vont en ADR ou au CLAUDE.md, pas ici.
 
+## 2026-07-08 — WebRTC : la media (RTP) ne traverse pas WSL2 (NAT) ↔ navigateur Windows, alors que le signaling passe
+
+- **Tenté** : brancher le prototype voix A2 (Pipecat SmallWebRTC servi dans WSL2, port 8700) depuis un navigateur **Windows** via `http://127.0.0.1:8700/prototype` (getUserMedia + WebRTC) ; premier bout-en-bout du pont WebView2↔Pipecat (ADR 0012, risque n°1).
+- **Pourquoi c'est mort** : deux topologies testées, deux pannes distinctes (le client navigateur tourne côté **Windows**, Pipecat dans **WSL2**) :
+  - **Mode NAT** (défaut, `eth0` en 172.22.x) : signaling `/offer` OK (forwarding localhost **TCP**), ICE atteint `connected`/`completed`, **mais la media UDP (RTP) ne traverse pas le NAT** → `read_audio_frame: No audio frame received` + TTS de sortie inaudible. Le `connected` est **trompeur** (checks STUN passent, pas le flux media).
+  - **Mode `mirrored`** (`.wslconfig` `networkingMode=mirrored`, `eth1` en 10.178.x partagé) : **régression** — l'ICE ne connecte **plus du tout**, `Timeout establishing the connection to the remote peer. Closing.` après ~60 s. Désobfuscation mDNS du navigateur (`edge://flags` « Anonymize local IPs… » → Disabled) **testée, sans effet** → mDNS écarté. Suspect restant : **pare-feu Hyper-V** de WSL (actif par défaut en mirrored, bloque l'UDP entrant vers le process WSL).
+  - **TURN local (coturn en Docker)** ajouté et **fonctionnel** (les `ALLOCATE` réussissent, auth OK). Mais en réseau **bridge**, coturn attribue ses relais sur l'IP interne du conteneur (`172.19.0.12`) → injoignable des deux pairs, ICE échoue quand même. Passage en `network_mode: host` tenté comme remède (relais = vraies adresses hôte). **Non concluant dans le temps investi** → arbitrage : on arrête de bricoler le réseau.
+- **Valide tant que** : le pont WebRTC brut **navigateur-Windows ↔ Pipecat-WSL2** n'est pas validé *bout-en-bout*. Décision (2026-07-08) : la validation media est **différée** jusqu'à ce que client et transport soient **co-localisés** — soit la coquille A3 (dont la topologie de déploiement tranchera), soit un client lancé côté WSL. Le code A2 est, lui, validé (API Pipecat, signaling `/offer`, allocation TURN). coturn reste en place, réutilisable. Ne PAS re-payer les pistes NAT / mirrored+mDNS / mirrored+firewall / coturn-bridge : déjà explorées ici.
+
 ## ~~2026-07-02 — `hf download unsloth/Qwen3.6-35B-A3B-GGUF` échoue (*File not found in repository*)~~ — PÉRIMÉE le 2026-07-05
 
 > Condition de péremption atteinte : fichiers re-listés via l'API HF le 2026-07-05.

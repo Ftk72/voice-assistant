@@ -14,7 +14,11 @@ dependencies = [
 [project.optional-dependencies]
 # Extra volontairement séparé (dépendance lourde) — NE PAS installer ici.
 # Plus tard, lancé par l'utilisateur : uv sync --extra pipecat
-pipecat = ["pipecat-ai[webrtc,silero,openai,whisper]>=1.5,<1.6"]
+#   webrtc → SmallWebRTC (aiortc) ; silero → VAD ; openai → services STT/TTS
+#   OpenAI-compat (branchés sur whisper.cpp et voice-forge). Extras vérifiés
+#   sur le pyproject de pipecat-ai (pas de « whisper » : on n'utilise pas
+#   faster-whisper mais le whisper.cpp du dépôt via l'API OpenAI-compat).
+pipecat = ["pipecat-ai[webrtc,silero,openai]>=1.5,<1.6"]
 
 [dependency-groups]
 dev = [
