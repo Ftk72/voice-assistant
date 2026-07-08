@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Time Forge — agenda &amp; minuteurs</title>
+<style>
+  :root {
+    --bg: #0e1013; --panel: #1a1d23; --line: #2e333b;
+    --text: #e8e9eb; --muted: #9aa0a8;
+    --accent: #f0a63a; --erreur: #e5534b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  header { display: flex; align-items: center; gap: .6rem; padding: .65rem 1rem;
+           background: var(--panel); border-bottom: 1px solid var(--line); }
+  h1 { font-size: .95rem; margin: 0; font-weight: 600; }
+  #statut { color: var(--muted); font-size: .8rem; margin-left: auto; }
+  #statut.erreur { color: var(--erreur); }
+  main { display: flex; flex-wrap: wrap; gap: 1rem; padding: 1rem; max-width: 900px; margin: 0 auto; }
+  section { flex: 1 1 380px; min-width: 0; }
+  section h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em;
+               color: var(--muted); margin: 0 0 .6rem; }
+  .jour { margin-bottom: 1rem; }
+  .jour h3 { font-size: .85rem; font-weight: 600; margin: 0 0 .4rem; color: var(--accent); }
+  .evenement, .minuteur { border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
+                           padding: .5rem .65rem; margin-bottom: .5rem; }
+  .evenement.passe { opacity: .45; }
+  .evenement .titre { font-weight: 600; }
+  .evenement .meta { color: var(--muted); font-size: .78rem; margin-top: .2rem; }
+  .pastille { display: inline-block; margin-right: .3rem; }
+  .annonce-faite { color: var(--muted); font-style: italic; }
+  .minuteur .label { font-weight: 600; }
+  .minuteur .compte { font-variant-numeric: tabular-nums; color: var(--accent); font-size: 1.1rem; }
+  .minuteur.termine .compte { color: var(--muted); }
+  .vide { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Time Forge — agenda &amp; minuteurs</h1>
+  <span id="statut">Chargement…</span>
+</header>
+<main>
+  <section id="section-agenda">
+    <h2>Agenda</h2>
+    <div id="agenda"><p class="vide">Chargement…</p></div>
+  </section>
+  <section id="section-minuteurs">
+    <h2>Minuteurs</h2>
+    <div id="minuteurs"><p class="vide">Chargement…</p></div>
+  </section>
+</main>
+<script>
+"use strict";
+
+const JOURS = [
+  "dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi",
+];
+const MOIS = [
+  "janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+];
+
+let evenements = [];
+let minuteurs = [];
+
+function formatJour(date) {
+  return `${JOURS[date.getDay()]} ${date.getDate()} ${MOIS[date.getMonth()]}`;
+}
+
+function formatHeure(date) {
+  return date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function rendreAgenda() {
+  const conteneur = document.getElementById("agenda");
+  if (evenements.length === 0) {
+    conteneur.innerHTML = '<p class="vide">Aucun événement dans les 7 prochains jours.</p>';
+    return;
+  }
+  const maintenant = new Date();
+  const tries = [...evenements].sort((a, b) => new Date(a.when) - new Date(b.when));
+  const groupes = new Map();
+  for (const evt of tries) {
+    const date = new Date(evt.when);
+    const cle = date.toDateString();
+    if (!groupes.has(cle)) groupes.set(cle, { date, items: [] });
+    groupes.get(cle).items.push(evt);
+  }
+  let html = "";
+  for (const { date, items } of groupes.values()) {
+    html += `<div class="jour"><h3>${formatJour(date)}</h3>`;
+    for (const evt of items) {
+      const quand = new Date(evt.when);
+      const passe = quand < maintenant;
+      const estRappel = !!evt.announce_lead_minutes;
+      const dejaAnnonce = !!evt.announced_at;
+      let pastille = "";
+      if (estRappel) {
+        pastille = `<span class="pastille" title="Rappel, ${evt.announce_lead_minutes} min avant">🔔 ${evt.announce_lead_minutes} min</span>`;
+      }
+      const annoncePassee = dejaAnnonce ? '<span class="annonce-faite"> (déjà annoncé)</span>' : "";
+      html += `<div class="evenement${passe ? " passe" : ""}">`
+        + `<div class="titre">${pastille}${escape(evt.title)}</div>`
+        + `<div class="meta">${formatHeure(quand)}${annoncePassee}</div>`
+        + `</div>`;
+    }
+    html += "</div>";
+  }
+  conteneur.innerHTML = html;
+}
+
+function formatCompteARebours(msRestantes) {
+  if (msRestantes <= 0) return "terminé";
+  const secondesTotales = Math.floor(msRestantes / 1000);
+  const heures = Math.floor(secondesTotales / 3600);
+  const minutes = Math.floor((secondesTotales % 3600) / 60);
+  const secondes = secondesTotales % 60;
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(secondes).padStart(2, "0");
+  if (heures > 0) return `${heures}:${mm}:${ss}`;
+  return `${mm}:${ss}`;
+}
+
+function rendreMinuteurs() {
+  const conteneur = document.getElementById("minuteurs");
+  if (minuteurs.length === 0) {
+    conteneur.innerHTML = '<p class="vide">Aucun minuteur en cours.</p>';
+    return;
+  }
+  const maintenant = Date.now();
+  let html = "";
+  for (const m of minuteurs) {
+    const restant = new Date(m.ends_at).getTime() - maintenant;
+    const termine = restant <= 0;
+    html += `<div class="minuteur${termine ? " termine" : ""}" data-ends-at="${m.ends_at}">`
+      + `<div class="label">${escape(m.label)}</div>`
+      + `<div class="compte">${formatCompteARebours(restant)}</div>`
+      + `</div>`;
+  }
+  conteneur.innerHTML = html;
+}
+
+function escape(texte) {
+  const div = document.createElement("div");
+  div.textContent = texte;
+  return div.innerHTML;
+}
+
+function afficherErreur(message) {
+  const statut = document.getElementById("statut");
+  statut.textContent = message;
+  statut.classList.add("erreur");
+}
+
+function afficherOk() {
+  const statut = document.getElementById("statut");
+  statut.textContent = `Mis à jour à ${formatHeure(new Date())}`;
+  statut.classList.remove("erreur");
+}
+
+async function rafraichir() {
+  try {
+    const [reponseEvenements, reponseMinuteurs] = await Promise.all([
+      fetch("/events"),
+      fetch("/timers"),
+    ]);
+    if (!reponseEvenements.ok || !reponseMinuteurs.ok) {
+      throw new Error("Réponse HTTP en erreur");
+    }
+    evenements = await reponseEvenements.json();
+    minuteurs = await reponseMinuteurs.json();
+    rendreAgenda();
+    rendreMinuteurs();
+    afficherOk();
+  } catch (erreur) {
+    afficherErreur("Connexion au serveur impossible — nouvelle tentative dans 10 s.");
+  }
+}
+
+// Tic local des minuteurs : la seconde s'écoule côté client, indépendamment
+// du rafraîchissement réseau (qui ne sert qu'à récupérer la liste à jour).
+setInterval(rendreMinuteurs, 1000);
+
+rafraichir();
+setInterval(rafraichir, 10000);
+</script>
+</body>
+</html>

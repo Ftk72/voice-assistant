@@ -1,11 +1,21 @@
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from fastapi import APIRouter, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.schemas import Event, Timer
 
+VIZ_PAGE = Path(__file__).resolve().parent.parent / "viz" / "index.html"
+
 router = APIRouter()
+
+
+@router.get("/agenda", include_in_schema=False)
+def agenda_page() -> FileResponse:
+    """Page de visualisation agenda + minuteurs (roadmap B3)."""
+    return FileResponse(VIZ_PAGE)
 
 
 @router.get("/health")
