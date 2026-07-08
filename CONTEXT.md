@@ -22,7 +22,9 @@ Glossaire du domaine. Uniquement le vocabulaire — aucun détail d'implémentat
 
 **Moteur STT** — Le transcripteur de la parole, servi en local derrière un endpoint compatible `/audio/transcriptions`.
 
-**Conversation** — L'échange vocal continu avec l'assistant : mot d'éveil ou déclenchement manuel, tours de parole détectés, transcription, réponse streamée phrase par phrase, interruption possible de l'assistant. (Remplace le terme « mode appel ».)
+**Conversation** — L'échange vocal continu avec l'assistant : ouverte par le mot d'éveil ou un déclenchement manuel, puis **plusieurs tours de parole** enchaînés micro ouvert (le mot d'éveil ne re-filtre pas chaque tour), transcription, réponse streamée phrase par phrase, interruption possible de l'assistant. Elle se **termine** par le silence (dépassement de la fenêtre d'écoute de suite) ou un arrêt explicite (bouton, phrase de fin) ; sa fin déclenche la capture mémoire (ADR 0011). (Remplace le terme « mode appel ».)
+
+**Fenêtre d'écoute de suite** — Le délai pendant lequel, après une réponse de l'assistant, la conversation reste ouverte micro ouvert sans nouveau mot d'éveil : si l'utilisateur reparle, la conversation continue ; si le silence dépasse ce délai, elle se termine et l'assistant retombe en veille.
 
 ## Termes — Architecture modulaire (ADR 0009)
 
