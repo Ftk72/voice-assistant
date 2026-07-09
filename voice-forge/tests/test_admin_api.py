@@ -22,6 +22,16 @@ def test_importer_un_nom_deja_pris_renvoie_409(client):
     assert import_voice(client, "Emma").status_code == 409
 
 
+def test_importer_un_fichier_qui_n_est_pas_un_wav_renvoie_415(client):
+    response = client.post(
+        "/admin/api/voices",
+        data={"name": "Emma"},
+        files={"speaker": ("sample.wav", b"pas un wav", "audio/wav")},
+    )
+
+    assert response.status_code == 415
+
+
 def test_les_noms_dangereux_sont_rejetes(client):
     for name in ["../evil", "a/b", "", "x" * 51]:
         assert import_voice(client, name).status_code == 422, name

@@ -24,8 +24,11 @@ async def import_voice(
     name: Annotated[str, Form(pattern=VOICE_NAME_PATTERN)],
     speaker: UploadFile,
 ) -> Voice:
+    speaker_bytes = await speaker.read()
+    if speaker_bytes[0:4] != b"RIFF" or speaker_bytes[8:12] != b"WAVE":
+        raise HTTPException(status_code=415, detail="Le fichier n'est pas un WAV.")
     try:
-        return request.app.state.voice_manager.create_voice(name, await speaker.read())
+        return request.app.state.voice_manager.create_voice(name, speaker_bytes)
     except FileExistsError:
         raise HTTPException(status_code=409, detail=f"La voix « {name} » existe déjà") from None
 

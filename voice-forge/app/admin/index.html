@@ -38,12 +38,18 @@
   #status.error { color: #f87171; }
   audio { height: 32px; }
   .empty { color: #9b9b9b; font-size: .9rem; padding: .5rem 0; }
+  #record-indicator { display: inline-flex; align-items: center; gap: .4rem; font-size: .85rem; color: #f87171; }
+  #record-indicator .dot {
+    width: .6rem; height: .6rem; border-radius: 50%; background: #f87171;
+    animation: clignote 1s ease-in-out infinite;
+  }
+  @keyframes clignote { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
 </style>
 </head>
 <body>
 <main>
   <h1>Voice Forge</h1>
-  <p class="sub">Administration des voix — l'usage quotidien (sélection, appel) se fait dans OpenWebUI.</p>
+  <p class="sub">Administration des voix — l'usage quotidien (sélection, appel) se fait ailleurs, ces voix sont simplement visibles pour l'assistant.</p>
 
   <section class="card">
     <h2 style="font-size:1rem;margin:0 0 .75rem">Importer une voix</h2>
@@ -54,6 +60,20 @@
       <button type="submit">Importer</button>
     </form>
     <div id="status"></div>
+  </section>
+
+  <section class="card">
+    <h2 style="font-size:1rem;margin:0 0 .75rem">Enregistrer ma voix</h2>
+    <form id="record-form">
+      <input type="text" name="name" id="record-name" placeholder="Nom de la voix (ex. Emma)" required
+             pattern="[\w À-ÿ'-]{1,50}">
+      <button type="button" id="record-toggle">Démarrer l'enregistrement</button>
+      <span id="record-indicator" style="display:none">
+        <span class="dot"></span> <span id="record-timer">0 s</span>
+      </span>
+    </form>
+    <div id="record-preview" style="margin-top:.6rem"></div>
+    <div id="record-status" style="font-size:.85rem; color:#9b9b9b; min-height:1.2em; margin-top:.5rem"></div>
   </section>
 
   <section class="card">
@@ -123,7 +143,7 @@ document.getElementById("import-form").onsubmit = async (event) => {
     body: new FormData(event.target),
   });
   if (response.ok) {
-    setStatus("Voix importée. Elle est déjà visible dans OpenWebUI.");
+    setStatus("Voix importée. Elle est déjà visible pour l'assistant.");
     event.target.reset();
   } else {
     const detail = (await response.json()).detail;
@@ -131,6 +151,184 @@ document.getElementById("import-form").onsubmit = async (event) => {
   }
   refresh();
 };
+
+// Capture micro jamais exécutée en navigateur à ce jour — à valider dans WebView2.
+const recordStatusEl = document.getElementById("record-status");
+const setRecordStatus = (msg, isError = false) => {
+  recordStatusEl.textContent = msg;
+  recordStatusEl.style.color = isError ? "#f87171" : "#9b9b9b";
+};
+
+/**
+ * Encode un AudioBuffer en WAV PCM 16 bits mono (writer JS pur, sans dépendance).
+ * Downmixe les canaux multiples par moyenne ; conserve le sampleRate d'origine.
+ */
+function encoderWav(audioBuffer) {
+  const nbCanaux = audioBuffer.numberOfChannels;
+  const nbEchantillons = audioBuffer.length;
+  const sampleRate = audioBuffer.sampleRate;
+
+  // Downmix mono : moyenne des canaux.
+  const mono = new Float32Array(nbEchantillons);
+  for (let canal = 0; canal < nbCanaux; canal++) {
+    const donnees = audioBuffer.getChannelData(canal);
+    for (let i = 0; i < nbEchantillons; i++) {
+      mono[i] += donnees[i] / nbCanaux;
+    }
+  }
+
+  const octetsParEchantillon = 2; // Int16
+  const tailleData = nbEchantillons * octetsParEchantillon;
+  const buffer = new ArrayBuffer(44 + tailleData);
+  const vue = new DataView(buffer);
+
+  const ecrireChaine = (offset, chaine) => {
+    for (let i = 0; i < chaine.length; i++) vue.setUint8(offset + i, chaine.charCodeAt(i));
+  };
+
+  ecrireChaine(0, "RIFF");
+  vue.setUint32(4, 36 + tailleData, true);
+  ecrireChaine(8, "WAVE");
+  ecrireChaine(12, "fmt ");
+  vue.setUint32(16, 16, true); // taille du sous-bloc fmt
+  vue.setUint16(20, 1, true); // format PCM
+  vue.setUint16(22, 1, true); // mono
+  vue.setUint32(24, sampleRate, true);
+  vue.setUint32(28, sampleRate * octetsParEchantillon, true); // débit octets/s
+  vue.setUint16(32, octetsParEchantillon, true); // alignement bloc
+  vue.setUint16(34, 16, true); // bits par échantillon
+  ecrireChaine(36, "data");
+  vue.setUint32(40, tailleData, true);
+
+  let offset = 44;
+  for (let i = 0; i < nbEchantillons; i++) {
+    const echantillon = Math.max(-1, Math.min(1, mono[i]));
+    vue.setInt16(offset, echantillon < 0 ? echantillon * 0x8000 : echantillon * 0x7fff, true);
+    offset += 2;
+  }
+
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+let mediaRecorder = null;
+let chunksEnregistres = [];
+let minuteurId = null;
+let secondesEcoulees = 0;
+let dernierBlobWav = null;
+
+const recordToggleBtn = document.getElementById("record-toggle");
+const recordIndicator = document.getElementById("record-indicator");
+const recordTimer = document.getElementById("record-timer");
+const recordPreview = document.getElementById("record-preview");
+const recordNameInput = document.getElementById("record-name");
+
+recordToggleBtn.onclick = async () => {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop();
+    return;
+  }
+  await demarrerEnregistrement();
+};
+
+async function demarrerEnregistrement() {
+  setRecordStatus("");
+  recordPreview.innerHTML = "";
+  dernierBlobWav = null;
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setRecordStatus(
+      "Capture micro indisponible (contexte non sécurisé ou navigateur non compatible).",
+      true,
+    );
+    return;
+  }
+
+  let flux;
+  try {
+    flux = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (erreur) {
+    setRecordStatus("Accès au microphone refusé.", true);
+    return;
+  }
+
+  chunksEnregistres = [];
+  mediaRecorder = new MediaRecorder(flux);
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data.size > 0) chunksEnregistres.push(event.data);
+  };
+  mediaRecorder.onstop = async () => {
+    flux.getTracks().forEach((piste) => piste.stop());
+    clearInterval(minuteurId);
+    recordIndicator.style.display = "none";
+    recordToggleBtn.textContent = "Démarrer l'enregistrement";
+    await traiterEnregistrement();
+  };
+
+  mediaRecorder.start();
+  secondesEcoulees = 0;
+  recordTimer.textContent = "0 s";
+  recordIndicator.style.display = "inline-flex";
+  recordToggleBtn.textContent = "Arrêter l'enregistrement";
+  minuteurId = setInterval(() => {
+    secondesEcoulees += 1;
+    recordTimer.textContent = `${secondesEcoulees} s`;
+  }, 1000);
+}
+
+async function traiterEnregistrement() {
+  setRecordStatus("Encodage…");
+  try {
+    const blobBrut = new Blob(chunksEnregistres, { type: mediaRecorder.mimeType });
+    const arrayBuffer = await blobBrut.arrayBuffer();
+    const contexteAudio = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuffer = await contexteAudio.decodeAudioData(arrayBuffer);
+    dernierBlobWav = encoderWav(audioBuffer);
+    await contexteAudio.close();
+
+    const audio = document.createElement("audio");
+    audio.controls = true;
+    audio.src = URL.createObjectURL(dernierBlobWav);
+    recordPreview.innerHTML = "";
+    recordPreview.appendChild(audio);
+
+    const envoyerBtn = document.createElement("button");
+    envoyerBtn.type = "button";
+    envoyerBtn.textContent = "Envoyer cette voix";
+    envoyerBtn.style.marginLeft = ".6rem";
+    envoyerBtn.onclick = envoyerEnregistrement;
+    recordPreview.appendChild(envoyerBtn);
+
+    setRecordStatus("Écoutez l'aperçu, puis envoyez si satisfait.");
+  } catch (erreur) {
+    setRecordStatus("Échec de l'encodage de l'enregistrement.", true);
+  }
+}
+
+async function envoyerEnregistrement() {
+  if (!dernierBlobWav) return;
+  if (!recordNameInput.reportValidity()) return;
+
+  setRecordStatus("Envoi…");
+  const donnees = new FormData();
+  donnees.append("name", recordNameInput.value);
+  donnees.append("speaker", dernierBlobWav, "enregistrement.wav");
+
+  try {
+    const response = await fetch("/admin/api/voices", { method: "POST", body: donnees });
+    if (response.ok) {
+      setRecordStatus("Voix enregistrée et visible pour l'assistant.");
+      recordNameInput.value = "";
+      recordPreview.innerHTML = "";
+      dernierBlobWav = null;
+      refresh();
+    } else {
+      const detail = (await response.json()).detail;
+      setRecordStatus(typeof detail === "string" ? detail : "Nom invalide.", true);
+    }
+  } catch (erreur) {
+    setRecordStatus("Échec réseau lors de l'envoi.", true);
+  }
+}
 
 refresh();
 </script>
