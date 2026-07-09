@@ -1,0 +1,28 @@
+[package]
+name = "coquille"
+version = "0.1.0"
+description = "Coquille — application de bureau native de l'assistant vocal (ADR 0010)"
+authors = ["ftk"]
+edition = "2021"
+# Rust 1.77+ requis par Tauri v2 (cf. https://v2.tauri.app/start/prerequisites/).
+rust-version = "1.77"
+
+# Bibliothèque : toute la logique vit ici (convention Tauri v2, partageable
+# desktop/mobile). `main.rs` ne fait qu'appeler `run()`.
+# Réf. https://v2.tauri.app/start/create-project/
+[lib]
+name = "coquille_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+# Génère le contexte Tauri (embarque tauri.conf.json, icônes, schémas de
+# capabilities). Réf. https://v2.tauri.app/start/create-project/
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Fonction « tray-icon » nécessaire pour l'icône de zone de notification.
+# Réf. https://v2.tauri.app/learn/system-tray/
+tauri = { version = "2", features = ["tray-icon"] }
+# Raccourci global (afficher la pastille).
+# Réf. https://v2.tauri.app/plugin/global-shortcut/
+tauri-plugin-global-shortcut = "2"

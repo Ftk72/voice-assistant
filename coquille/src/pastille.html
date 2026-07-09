@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pastille</title>
+    <link rel="stylesheet" href="pastille.css" />
+  </head>
+  <body>
+    <!-- Pastille : présence permanente de l'assistant (CONTEXT.md). Fenêtre
+         sans décor, transparente, toujours au-dessus. En v1 c'est un STUB
+         visuel : l'état ne reflète pas encore les événements RTVI réels.
+         Un clic fait défiler les états pour la démonstration visuelle. -->
+    <button id="pastille" class="etat-veille" type="button" title="Assistant vocal (stub)">
+      <span class="pastille-lumiere" aria-hidden="true"></span>
+      <span id="pastille-texte" class="pastille-texte">En veille</span>
+    </button>
+    <script src="pastille.js"></script>
+  </body>
+</html>

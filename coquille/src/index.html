@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Assistant vocal — console</title>
+    <link rel="stylesheet" href="console.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Console de l'assistant</h1>
+      <p class="intro">
+        Client voix de la coquille (ADR 0010, « bouton d'abord » ADR 0012).
+        Appuie, parle, écoute la réponse. La conversation passe par le
+        transport voix local (<code>127.0.0.1:8700</code>) ; aucune logique
+        métier ici — la coquille n'est que carte son et fenêtre.
+      </p>
+
+      <button id="bouton" type="button">Parler</button>
+      <div id="etat" role="status">En veille.</div>
+
+      <!-- Piste audio de retour de l'assistant. -->
+      <audio id="audio" autoplay></audio>
+
+      <pre id="journal" aria-label="Journal technique"></pre>
+    </main>
+
+    <script src="console.js"></script>
+  </body>
+</html>

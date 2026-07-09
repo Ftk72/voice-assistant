@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissions de base de la coquille : cœur Tauri et enregistrement du raccourci global. Le frontend (client voix) n'appelle aucune API Tauri en v1 ; le tray et le raccourci sont pilotés côté Rust.",
+  "windows": ["console", "pastille"],
+  "permissions": [
+    "core:default",
+    "global-shortcut:allow-register"
+  ]
+}

@@ -1,0 +1,82 @@
+/* Console de la coquille — thème sobre, sombre par défaut. Aucune ressource
+   externe (souveraineté ADR 0007) : polices système uniquement. */
+
+:root {
+  --fond: #1b1d21;
+  --fond-carte: #24272c;
+  --texte: #e7e9ee;
+  --texte-doux: #9aa0aa;
+  --accent: #4f9dff;
+  --bordure: #33363d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--fond);
+  color: var(--texte);
+  font-family: system-ui, "Segoe UI", sans-serif;
+  line-height: 1.5;
+}
+
+main {
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 2rem;
+}
+
+h1 {
+  font-size: 1.3rem;
+  margin: 0 0 0.75rem;
+}
+
+.intro {
+  color: var(--texte-doux);
+  font-size: 0.9rem;
+  margin: 0 0 1.5rem;
+}
+
+code {
+  background: var(--fond-carte);
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+}
+
+#bouton {
+  font-size: 1.15rem;
+  padding: 0.7rem 1.6rem;
+  cursor: pointer;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 0.6rem;
+}
+
+#bouton:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+#etat {
+  margin-top: 1rem;
+  font-weight: 600;
+}
+
+#journal {
+  margin-top: 1.25rem;
+  white-space: pre-wrap;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.8rem;
+  color: var(--texte-doux);
+  background: var(--fond-carte);
+  border: 1px solid var(--bordure);
+  border-radius: 0.5rem;
+  padding: 0.7rem;
+  max-height: 16rem;
+  overflow-y: auto;
+}

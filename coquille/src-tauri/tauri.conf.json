@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Coquille",
+  "version": "0.1.0",
+  "identifier": "fr.assistantvocal.coquille",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "console",
+        "title": "Assistant vocal — console",
+        "url": "index.html",
+        "width": 480,
+        "height": 660,
+        "minWidth": 360,
+        "minHeight": 480,
+        "resizable": true,
+        "visible": true
+      },
+      {
+        "label": "pastille",
+        "title": "Pastille",
+        "url": "pastille.html",
+        "width": 220,
+        "height": 96,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": false,
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:8700 ws://127.0.0.1:8700; media-src 'self' blob: mediastream:; img-src 'self' data:; style-src 'self'; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {}
+}
