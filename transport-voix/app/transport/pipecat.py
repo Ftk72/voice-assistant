@@ -59,6 +59,7 @@ class TransportPipecat(Transport):
         from pipecat.pipeline.pipeline import Pipeline
         from pipecat.pipeline.worker import PipelineParams, PipelineWorker
         from pipecat.services.openai.stt import OpenAISTTService
+        from pipecat.transcriptions.language import Language
         from pipecat.transports.base_transport import TransportParams
         from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
         from pipecat.workers.runner import WorkerRunner
@@ -81,10 +82,15 @@ class TransportPipecat(Transport):
         # STT whisper.cpp et TTS voice-forge, via l'API OpenAI-compat de chacun.
         # Réglages via `.Settings(...)` (les kwargs `model`/`voice` directs sont
         # dépréciés en Pipecat 1.5).
+        # `language` explicite : sans lui, OpenAISTTService retombe sur l'anglais
+        # (Language.EN) et annoncerait à Voxtral un audio anglais — or tout est en
+        # français (s.langue). Language('fr') = Language.FR.
         stt = OpenAISTTService(
             api_key=s.stt_api_key,
             base_url=s.stt_base_url,
-            settings=OpenAISTTService.Settings(model=s.stt_model),
+            settings=OpenAISTTService.Settings(
+                model=s.stt_model, language=Language(s.langue)
+            ),
         )
         # voice-forge n'est pas un client OpenAI neutre : voix hors énum OpenAI et
         # sortie WAV (pas PCM). Notre sous-classe lève ces deux blocages.
