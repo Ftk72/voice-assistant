@@ -40,15 +40,11 @@
       async function demarrer() {
         bouton.disabled = true;
         etat.textContent = "Connexion…";
-        // Force le relais par le coturn local : toute la media passe par lui,
-        // ce qui contourne les blocages NAT/pare-feu WSL2↔Windows (souverain,
-        // rien ne quitte la machine). Identifiants = config du transport.
-        pc = new RTCPeerConnection({
-          iceServers: [
-            { urls: "turn:127.0.0.1:3478", username: "voix", credential: "voixsecret" },
-          ],
-          iceTransportPolicy: "relay",
-        });
+        // ICE par défaut : la topologie retenue co-localise transport et client
+        // sur le même hôte Windows (candidats « host » en localhost). Pas de
+        // TURN/relay — le coturn était un contournement du pont WSL2↔Windows,
+        // abandonné (cf. docs/impasses.md).
+        pc = new RTCPeerConnection();
 
         pc.ontrack = (e) => {
           audio.srcObject = e.streams[0];

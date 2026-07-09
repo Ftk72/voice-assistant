@@ -5,7 +5,15 @@
 > supprimée : elle est marquée comme telle et redevient une prémisse à re-vérifier (`/premisses`).
 > Les contraintes permanentes (sans condition de validité) vont en ADR ou au CLAUDE.md, pas ici.
 
-## 2026-07-08 — WebRTC : la media (RTP) ne traverse pas WSL2 (NAT) ↔ navigateur Windows, alors que le signaling passe
+## 2026-07-09 — Pipecat `OpenAITTSService` rejette les voix hors énumération OpenAI
+
+- **Tenté** : brancher le TTS voice-forge (OpenAI-compat, voix « VoixDeTest ») dans le pipeline Pipecat via `OpenAITTSService(base_url=voice-forge)`.
+- **Pourquoi c'est mort** : `OpenAITTSService.run_tts` **valide la voix côté client** contre `VALID_VOICES` (alloy, ash, … verse) et lève un `ErrorFrame` **avant tout appel réseau** (0.000 s) → « VoixDeTest » refusée. Ce n'est donc PAS un client OpenAI-compat neutre. Il POSTe aussi `response_format:"pcm"` et traite la réponse comme du **PCM brut à `self.sample_rate`, mono**.
+- **Valide tant que** : on utilise `OpenAITTSService` tel quel pour voice-forge. Tombe en le **sous-classant** (override `run_tts` sans le check `VALID_VOICES`, voix passée telle quelle) ou via un service TTS Pipecat custom sur `/audio/speech` — à condition de vérifier le **format de sortie de voice-forge** (doit être PCM au bon sample_rate, sinon audio corrompu). Même vigilance à prévoir sur `OpenAISTTService` (non encore atteint au run).
+
+## ~~2026-07-08 — WebRTC : la media (RTP) ne traverse pas WSL2 (NAT) ↔ navigateur Windows~~ — RÉSOLUE le 2026-07-09 (co-localisation Windows)
+
+> Condition de la « valide tant que » atteinte : transport (Pipecat) ET client (coquille Tauri/WebView2) exécutés **tous deux en natif Windows** → media WebRTC en **localhost Windows** (`Connection state changed to: connected`, pipeline jusqu'au TTS). Le pont WebView2↔Pipecat (risque n°1, ADR 0012) est **validé**. coturn devient inutile pour ce chemin (laissé dormant). Les forges restent en WSL2/Docker, jointes en HTTP via mirrored.
 
 - **Tenté** : brancher le prototype voix A2 (Pipecat SmallWebRTC servi dans WSL2, port 8700) depuis un navigateur **Windows** via `http://127.0.0.1:8700/prototype` (getUserMedia + WebRTC) ; premier bout-en-bout du pont WebView2↔Pipecat (ADR 0012, risque n°1).
 - **Pourquoi c'est mort** : deux topologies testées, deux pannes distinctes (le client navigateur tourne côté **Windows**, Pipecat dans **WSL2**) :
