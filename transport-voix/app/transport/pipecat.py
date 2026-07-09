@@ -59,13 +59,13 @@ class TransportPipecat(Transport):
         from pipecat.pipeline.pipeline import Pipeline
         from pipecat.pipeline.worker import PipelineParams, PipelineWorker
         from pipecat.services.openai.stt import OpenAISTTService
-        from pipecat.services.openai.tts import OpenAITTSService
         from pipecat.transports.base_transport import TransportParams
         from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
         from pipecat.workers.runner import WorkerRunner
 
         from app.dialogue.rest import ClientDialogueREST
         from app.transport.dialogue_processor import ProcesseurDialogueForge
+        from app.transport.tts_voiceforge import ServiceTTSVoiceForge
 
         s = self._settings
 
@@ -86,10 +86,12 @@ class TransportPipecat(Transport):
             base_url=s.stt_base_url,
             settings=OpenAISTTService.Settings(model=s.stt_model),
         )
-        tts = OpenAITTSService(
+        # voice-forge n'est pas un client OpenAI neutre : voix hors énum OpenAI et
+        # sortie WAV (pas PCM). Notre sous-classe lève ces deux blocages.
+        tts = ServiceTTSVoiceForge(
             api_key=s.tts_api_key,
             base_url=s.tts_base_url,
-            settings=OpenAITTSService.Settings(voice=s.tts_voix_defaut, model=s.tts_model),
+            settings=ServiceTTSVoiceForge.Settings(voice=s.tts_voix_defaut, model=s.tts_model),
         )
 
         dialogue = ClientDialogueREST(s.dialogue_base_url)

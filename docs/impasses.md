@@ -5,11 +5,13 @@
 > supprimée : elle est marquée comme telle et redevient une prémisse à re-vérifier (`/premisses`).
 > Les contraintes permanentes (sans condition de validité) vont en ADR ou au CLAUDE.md, pas ici.
 
-## 2026-07-09 — Pipecat `OpenAITTSService` rejette les voix hors énumération OpenAI
+## ~~2026-07-09 — Pipecat `OpenAITTSService` rejette les voix hors énumération OpenAI~~ — LEVÉE EN CODE le 2026-07-09 (sous-classe `ServiceTTSVoiceForge`)
+
+> Condition de la « valide tant que » atteinte : on n'utilise plus `OpenAITTSService` tel quel. `transport-voix/app/transport/tts_voiceforge.py` (`ServiceTTSVoiceForge`) override `run_tts` — voix passée telle quelle (pas de check `VALID_VOICES`) et réponse routée par le helper Pipecat `_stream_audio_frames_from_iterator(strip_wav_header=True)`, qui retire l'en-tête WAV, **détecte le sample rate dedans** (octets 24-28) et rééchantillonne vers `self.sample_rate`. Prémisse « format voice-forge » tranchée : voice-forge renvoie du **WAV** (`media_type="audio/wav"`), **pas** du PCM comme le supposait `OpenAITTSService` — d'où l'usage du strip WAV plutôt qu'un simple retrait du check. 2 tests factices verts (voix hors énum acceptée + PCM reconstitué à l'identique après strip). **Jamais exécuté bout-en-bout** : reste à confirmer au premier run réel (annonce d'accueil audible via WebRTC). Vigilance jumelle **toujours ouverte** sur `OpenAISTTService` (whisper.cpp) — non atteint au run, peut avoir la même rigidité OpenAI.
 
 - **Tenté** : brancher le TTS voice-forge (OpenAI-compat, voix « VoixDeTest ») dans le pipeline Pipecat via `OpenAITTSService(base_url=voice-forge)`.
-- **Pourquoi c'est mort** : `OpenAITTSService.run_tts` **valide la voix côté client** contre `VALID_VOICES` (alloy, ash, … verse) et lève un `ErrorFrame` **avant tout appel réseau** (0.000 s) → « VoixDeTest » refusée. Ce n'est donc PAS un client OpenAI-compat neutre. Il POSTe aussi `response_format:"pcm"` et traite la réponse comme du **PCM brut à `self.sample_rate`, mono**.
-- **Valide tant que** : on utilise `OpenAITTSService` tel quel pour voice-forge. Tombe en le **sous-classant** (override `run_tts` sans le check `VALID_VOICES`, voix passée telle quelle) ou via un service TTS Pipecat custom sur `/audio/speech` — à condition de vérifier le **format de sortie de voice-forge** (doit être PCM au bon sample_rate, sinon audio corrompu). Même vigilance à prévoir sur `OpenAISTTService` (non encore atteint au run).
+- **Pourquoi c'est mort** : `OpenAITTSService.run_tts` **valide la voix côté client** contre `VALID_VOICES` (alloy, ash, … verse) et lève un `ErrorFrame` **avant tout appel réseau** (0.000 s) → « VoixDeTest » refusée. Ce n'est donc PAS un client OpenAI-compat neutre. Il POSTe aussi `response_format:"pcm"` et traite la réponse comme du **PCM brut à `self.sample_rate`, mono** — or voice-forge renvoie du **WAV**, donc retirer le seul check `VALID_VOICES` n'aurait pas suffi (en-tête WAV joué comme du bruit, rate faux).
+- **Valide tant que** : on utilise `OpenAITTSService` tel quel pour voice-forge. **Tombée** par la sous-classe `ServiceTTSVoiceForge` (cf. note ci-dessus).
 
 ## ~~2026-07-08 — WebRTC : la media (RTP) ne traverse pas WSL2 (NAT) ↔ navigateur Windows~~ — RÉSOLUE le 2026-07-09 (co-localisation Windows)
 
