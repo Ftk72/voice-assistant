@@ -1,7 +1,7 @@
 ---
 label: wayfinder:task
-statut: ouvert
-assigne:
+statut: clos
+assigne: agent principal (implémentation inline, session 2026-07-16)
 bloque-par: [0003-run-reel-bout-en-bout]
 ---
 
@@ -23,7 +23,7 @@ RTVI réellement émis (noms, timing, payloads : différée ADR 0012 levée).
 - Critère de clôture : cycle complet visible sur la pastille pendant une
   conversation réelle (HITL final court pour la vérification à l'écran).
 
-## État (2026-07-16) — implémenté, en attente de vérification à l'écran
+## Résolution (2026-07-16) — validé au réel
 
 Débloqué : 0003 confirmé au réel par l'utilisateur (« ça marche et ça répond »).
 Implémentation livrée (option **console lit, relaie à la pastille** — la
@@ -42,7 +42,10 @@ connexion WebRTC et le canal `pipecat` vivent dans la console, pas la pastille) 
 Format du fil **groundé sur le Pipecat 1.5.0 installé** (pas deviné) :
 `{label:"rtvi-ai", type, id, data}` envoyé brut par `send_app_message`.
 
-Reste (HITL, à l'écran, après relance de la coquille) : confirmer que les états
-défilent fidèlement pendant une conversation, et **relever les types RTVI
-réellement émis** (le mapping est bâti sur les modèles Pipecat, à valider en
-direct). Toute divergence → correctif ici + note `docs/impasses.md`.
+Validé à l'écran par l'utilisateur au run réel : chaîne voix complète
+fonctionnelle (STT français parfait, TTFB 0,3-0,5 s ; réponse audio obtenue).
+Seule réserve : **latence du premier tour à froid** (préfill LLM ~13 s, connu
+handoff 0016) — à mesurer en régime pour le ticket 0011 (arbitrage latence,
+cible ≤ 2 s). Le mapping RTVI (bâti sur les modèles Pipecat 1.5) est en place ;
+la trace `RTVI: <type>` dans le journal de la console reste l'outil de contrôle
+si un état diverge un jour.

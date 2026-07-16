@@ -42,6 +42,7 @@ function traiterMessageRtvi(donnees) {
     return; // keepalive « ping » ou trame non-JSON : ignorée
   }
   if (!msg || msg.label !== "rtvi-ai") return; // signalling & autres : ignorés
+  tracer("RTVI: " + msg.type); // trace la voix du transport (types réellement émis)
   switch (msg.type) {
     case "bot-started-speaking":
       emettreEtatPastille("parle");

@@ -55,6 +55,10 @@ wayfinder « plan, don't do ») jusqu'à la stack qui parle.
   rebuilder.
 
 - [Recherche mot d'éveil français](tickets/0009-recherche-mot-d-eveil-francais.md) — openWakeWord + portage WASM vendoré, mot FR à entraîner sur mesure (aucun modèle prêt) ; Porcupine disqualifié (AccessKey réseau) ; plan B : bouton.
+- [RTVI réel dans la pastille](tickets/0007-rtvi-reel-dans-la-pastille.md) —
+  pastille pilotée par les événements RTVI (console lit le canal, relaie l'état
+  veille/écoute/parle par événement Tauri) ; **validé au réel le 2026-07-16**.
+  Débloque 0008 (module dialogue).
 
 ## Pas encore spécifié
 
