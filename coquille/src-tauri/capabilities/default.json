@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions de base de la coquille : cœur Tauri et enregistrement du raccourci global. Le frontend (client voix) n'appelle aucune API Tauri en v1 ; le tray et le raccourci sont pilotés côté Rust.",
+  "description": "Permissions de base de la coquille : cœur Tauri (dont l'API d'événements, couverte par core:default) et enregistrement du raccourci global. Le frontend utilise l'API d'événements Tauri pour relayer l'état de conversation de la console vers la pastille (événement `etat-pastille`) ; le tray et le raccourci sont pilotés côté Rust.",
   "windows": ["console", "pastille"],
   "permissions": [
     "core:default",

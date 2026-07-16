@@ -8,13 +8,13 @@
   </head>
   <body>
     <!-- Pastille : présence permanente de l'assistant (CONTEXT.md). Fenêtre
-         sans décor, transparente, toujours au-dessus. En v1 c'est un STUB
-         visuel : l'état ne reflète pas encore les événements RTVI réels.
-         Un clic fait défiler les états pour la démonstration visuelle. -->
-    <button id="pastille" class="etat-veille" type="button" title="Assistant vocal (stub)">
+         sans décor, transparente, toujours au-dessus. L'état (veille / écoute /
+         parle) reflète les événements RTVI réels du transport, relayés par la
+         console via l'événement Tauri `etat-pastille` (cf. pastille.js). -->
+    <div id="pastille" class="etat-veille" title="Assistant vocal">
       <span class="pastille-lumiere" aria-hidden="true"></span>
       <span id="pastille-texte" class="pastille-texte">En veille</span>
-    </button>
+    </div>
     <script src="pastille.js"></script>
   </body>
 </html>

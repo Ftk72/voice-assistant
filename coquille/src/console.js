@@ -20,6 +20,44 @@ function tracer(msg) {
   journal.scrollTop = journal.scrollHeight;
 }
 
+// Relais d'état vers la pastille (fenêtre séparée, sans connexion propre).
+// La console est la seule à tenir la connexion WebRTC : elle traduit les
+// événements RTVI du transport en état visuel (veille / écoute / parle) et le
+// diffuse par un événement Tauri. La pastille n'écoute et n'affiche — aucune
+// décision côté coquille (ADR 0009).
+function emettreEtatPastille(nom) {
+  window.__TAURI__?.event.emit("etat-pastille", nom);
+}
+
+// Traduit un message RTVI (Pipecat 1.5) en état de pastille. Le fil : messages
+// JSON `{label:"rtvi-ai", type, id, data}` envoyés bruts par le transport
+// (SmallWebRTC `send_app_message`) sur le canal de données. On ne retient que
+// les transitions veille/écoute/parle ; le reste (transcriptions, métriques,
+// texte TTS) n'a pas d'effet visuel sur la pastille.
+function traiterMessageRtvi(donnees) {
+  let msg;
+  try {
+    msg = JSON.parse(donnees);
+  } catch {
+    return; // keepalive « ping » ou trame non-JSON : ignorée
+  }
+  if (!msg || msg.label !== "rtvi-ai") return; // signalling & autres : ignorés
+  switch (msg.type) {
+    case "bot-started-speaking":
+      emettreEtatPastille("parle");
+      break;
+    case "bot-stopped-speaking":
+    case "bot-interrupted":
+    case "bot-ready":
+    case "user-started-speaking":
+    case "user-stopped-speaking":
+      emettreEtatPastille("ecoute");
+      break;
+    default:
+      break;
+  }
+}
+
 async function demarrer() {
   bouton.disabled = true;
   etat.textContent = "Connexion…";
@@ -36,8 +74,11 @@ async function demarrer() {
     tracer("connectionState = " + pc.connectionState);
   };
 
-  // Canal de données pour les événements RTVI (transcriptions, phrases).
-  pc.createDataChannel("pipecat");
+  // Canal de données pour les événements RTVI (le transport s'attache au canal
+  // que le client ouvre ; le label importe peu côté serveur). On y lit les
+  // transitions veille/écoute/parle pour piloter la pastille.
+  const canal = pc.createDataChannel("pipecat");
+  canal.onmessage = (e) => traiterMessageRtvi(e.data);
 
   // Micro (getUserMedia — AEC/NS/AGC du moteur Chromium/WebView2, ADR 0010).
   // addTrack crée un transceiver **sendrecv** : il envoie le micro ET reçoit
@@ -83,6 +124,9 @@ async function demarrer() {
   await pc.setRemoteDescription(answer);
   tracer("Réponse SDP appliquée (pc_id=" + answer.pc_id + ").");
   etat.textContent = "En conversation.";
+  // Conversation ouverte : la pastille passe de veille à écoute. Les
+  // événements RTVI suivants (bot parle / se tait) affineront l'état.
+  emettreEtatPastille("ecoute");
   bouton.textContent = "Raccrocher";
   bouton.disabled = false;
   bouton.onclick = raccrocher;
@@ -98,6 +142,7 @@ function raccrocher() {
     audio.srcObject = null;
   }
   etat.textContent = "En veille.";
+  emettreEtatPastille("veille");
   bouton.textContent = "Parler";
   bouton.onclick = demarrer;
 }
