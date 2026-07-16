@@ -58,6 +58,7 @@ class TransportPipecat(Transport):
         from pipecat.frames.frames import TTSSpeakFrame
         from pipecat.pipeline.pipeline import Pipeline
         from pipecat.pipeline.worker import PipelineParams, PipelineWorker
+        from pipecat.processors.audio.vad_processor import VADProcessor
         from pipecat.services.openai.stt import OpenAISTTService
         from pipecat.transcriptions.language import Language
         from pipecat.transports.base_transport import TransportParams
@@ -75,9 +76,16 @@ class TransportPipecat(Transport):
             params=TransportParams(
                 audio_in_enabled=True,
                 audio_out_enabled=True,
-                vad_analyzer=SileroVADAnalyzer(),
             ),
         )
+
+        # Pipecat 1.5 : le VAD est un processeur de pipeline explicite. Le
+        # passer en `vad_analyzer=` à TransportParams (API pré-1.5) est ignoré
+        # en silence par pydantic — Silero se charge mais n'analyse jamais rien
+        # (payé au premier run réel : parole jamais détectée, cf.
+        # docs/impasses.md 2026-07-16). Le VADProcessor émet les trames
+        # VADUserStarted/StoppedSpeakingFrame qu'attend le STT segmenté.
+        vad = VADProcessor(vad_analyzer=SileroVADAnalyzer())
 
         # STT whisper.cpp et TTS voice-forge, via l'API OpenAI-compat de chacun.
         # Réglages via `.Settings(...)` (les kwargs `model`/`voice` directs sont
@@ -101,11 +109,17 @@ class TransportPipecat(Transport):
         )
 
         dialogue = ClientDialogueREST(s.dialogue_base_url)
-        processeur_df = ProcesseurDialogueForge(dialogue, persona=s.persona_defaut)
+        # `voix_defaut` = voix de montage du TTS (ci-dessus) : le processeur ne
+        # signalera un changement de voix que si le flux Dialogue Forge en porte
+        # une différente (dérogation effective au tour suivant, ADR 0012 déc. 5).
+        processeur_df = ProcesseurDialogueForge(
+            dialogue, persona=s.persona_defaut, voix_defaut=s.tts_voix_defaut
+        )
 
         pipeline = Pipeline(
             [
                 transport.input(),  # audio micro depuis la webview
+                vad,  # détection de parole (Silero) — segmente pour le STT
                 stt,  # whisper.cpp (batch)
                 processeur_df,  # Dialogue Forge (remplace l'étage LLM)
                 tts,  # voice-forge

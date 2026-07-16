@@ -2,6 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import Settings
 from app.dialogue.base import ClientDialogue
@@ -65,6 +66,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await aclose()
 
     app = FastAPI(title="Transport Voix", lifespan=lifespan)
+    # La coquille (WebView2, origine tauri.localhost) appelle /offer en
+    # cross-origin : sans CORS, son préflight OPTIONS est refusé (405).
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origines,
+        allow_origin_regex=settings.cors_origine_regex,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Journalise l'Origin de chaque requête /offer (via le logger uvicorn,
+    # seul configuré sous `python -m app`) : c'est LA donnée qu'il faut quand
+    # un client local est refusé par le CORS — ajouté après un 400 inexpliqué
+    # de la coquille au premier run réel (2026-07-10). Déclaré APRÈS le
+    # middleware CORS pour être plus externe que lui (Starlette empile en
+    # ordre inverse) et voir aussi les préflights rejetés.
+    @app.middleware("http")
+    async def journaliser_origine_offer(request, call_next):
+        if request.url.path == "/offer":
+            logging.getLogger("uvicorn.error").info(
+                "%s /offer — Origin: %r, méthode demandée: %r, en-têtes demandés: %r",
+                request.method,
+                request.headers.get("origin"),
+                request.headers.get("access-control-request-method"),
+                request.headers.get("access-control-request-headers"),
+            )
+        return await call_next(request)
     app.state.settings = settings
     app.state.stt = stt
     app.state.tts = tts

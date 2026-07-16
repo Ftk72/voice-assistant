@@ -21,7 +21,14 @@ class ClientDialogueREST(ClientDialogue):
     """Client HTTP du Dialogue Forge."""
 
     def __init__(self, base_url: str) -> None:
-        self._client = httpx.AsyncClient(base_url=base_url)
+        # Timeout de lecture généreux : le défaut httpx (5 s) tuait le stream
+        # du premier tour à froid (prefill LLM ~13 s mesuré, cache de préfixe
+        # vide — constaté au premier run réel, 2026-07-16). La cible ≤ 2 s est
+        # une exigence produit, pas une affaire de timeout client.
+        self._client = httpx.AsyncClient(
+            base_url=base_url,
+            timeout=httpx.Timeout(10.0, read=120.0),
+        )
 
     async def creer_conversation(self, persona: str | None = None) -> str:
         reponse = await self._client.post("/conversations", json={"persona": persona})

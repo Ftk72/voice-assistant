@@ -33,12 +33,27 @@ class Settings(BaseSettings):
     tts_model: str = "voiceforge"
     tts_api_key: str = "sk-local"
     tts_voix_defaut: str = "VoixDeTest"
+    # Origines autorisées à appeler le transport en cross-origin : la coquille
+    # (Tauri v2 sert son front sous http://tauri.localhost sur Windows/WebView2 ;
+    # variantes selon plateforme). Sans elles, le préflight OPTIONS /offer est
+    # refusé (405) et la console ne peut pas ouvrir la conversation.
+    cors_origines: list[str] = [
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+        "tauri://localhost",
+    ]
+    # Filet regex en complément de la liste : toutes les variantes locales
+    # légitimes (tauri.localhost, localhost/127.0.0.1 avec port). Le service
+    # n'écoute que sur 127.0.0.1 ; aucune origine distante n'est admise.
+    cors_origine_regex: str = (
+        r"^(https?://(tauri\.localhost|localhost|127\.0\.0\.1)(:\d+)?|tauri://localhost)$"
+    )
     # Serveurs STUN pour la négociation WebRTC. **Vide par défaut = souverain**.
     stun_urls: list[str] = []
-    # TURN local (coturn, service compose). Relaie la media WebRTC : forcé des
-    # deux côtés (navigateur + Pipecat), il route tout le flux par coturn et
-    # contourne les blocages NAT/pare-feu du pont WSL2↔Windows sans que rien ne
-    # quitte la machine (cf. docs/impasses.md). Vide = pas de TURN.
-    turn_url: str = "turn:127.0.0.1:3478"
+    # TURN optionnel. Vide par défaut : coquille et transport sont co-localisés
+    # sur l'hôte Windows, la media passe en localhost sans relais (le détour
+    # coturn de l'époque WSL2↔navigateur est une impasse résolue, cf.
+    # docs/impasses.md 2026-07-08 ; un TURN mort ne ferait que ralentir l'ICE).
+    turn_url: str = ""
     turn_user: str = "voix"
     turn_password: str = "voixsecret"

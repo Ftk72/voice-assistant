@@ -1,20 +1,21 @@
 """Service TTS Pipecat adapté à voice-forge.
 
-⚠️ Jamais exécuté bout-en-bout à ce jour — cf. CLAUDE.md. Ne pas présenter
-comme fonctionnel tant qu'il n'a pas synthétisé dans un vrai run.
-
-Sous-classe le `OpenAITTSService` de Pipecat, qui n'est **pas** un client
-OpenAI-compat neutre, pour deux raisons vérifiées (cf. `docs/impasses.md`,
-entrée 2026-07-09) :
+Synthèse exécutée en réel pour la première fois le 2026-07-10 (annonce
+d'accueil audible). Sous-classe le `OpenAITTSService` de Pipecat, qui n'est
+**pas** un client OpenAI-compat neutre, pour trois raisons vérifiées (cf.
+`docs/impasses.md`, entrée 2026-07-09, et le premier run réel) :
 
 1. Il **valide la voix côté client** contre l'énumération OpenAI (`VALID_VOICES`)
    et rejette « VoixDeTest » (et toute voix enrôlée) *avant* tout appel réseau.
    On retire cette validation : voice-forge accepte n'importe quelle voix.
 2. Il traite la réponse comme du **PCM brut**, alors que voice-forge renvoie du
-   **WAV** (en-tête 44 o + débit propre au modèle : `chatterbox.sr`, Qwen3…).
-   On route donc les octets par `_stream_audio_frames_from_iterator(
-   strip_wav_header=True)`, helper Pipecat qui retire l'en-tête, détecte le
-   sample rate dedans (octets 24-28) et rééchantillonne vers `self.sample_rate`.
+   **WAV**. On route donc les octets par `_stream_audio_frames_from_iterator(
+   strip_wav_header=True)`, helper Pipecat qui retire l'en-tête, y détecte le
+   sample rate (octets 24-28) et rééchantillonne vers `self.sample_rate`.
+3. Ce helper suppose un en-tête de **44 octets** et du **PCM 16 bits** — or le
+   WAV Chatterbox est en **float32** avec ses données à l'offset 80 (grésillement
+   constaté au premier run). Le flux passe donc d'abord par
+   `NormaliseurWavPCM16`, qui réécrit en-tête canonique + échantillons int16.
 
 Le reste (POST `/audio/speech`, streaming, métriques) est réutilisé tel quel.
 
@@ -28,6 +29,8 @@ from pipecat.frames.frames import ErrorFrame, Frame
 from pipecat.services.openai.tts import OpenAITTSService
 from pipecat.services.settings import assert_given
 from pipecat.utils.tracing.service_decorators import traced_tts
+
+from app.transport.normaliseur_wav import NormaliseurWavPCM16
 
 
 class ServiceTTSVoiceForge(OpenAITTSService):
@@ -65,8 +68,19 @@ class ServiceTTSVoiceForge(OpenAITTSService):
             await self.start_tts_usage_metrics(text)
             await self.stop_ttfb_metrics()
 
+            normaliseur = NormaliseurWavPCM16()
+
+            async def flux_normalise():
+                async for morceau in reponse.iter_bytes(self.chunk_size):
+                    normalise = normaliseur.avaler(morceau)
+                    if normalise:
+                        yield normalise
+                reste = normaliseur.clore()
+                if reste:
+                    yield reste
+
             async for frame in self._stream_audio_frames_from_iterator(
-                reponse.iter_bytes(self.chunk_size),
+                flux_normalise(),
                 strip_wav_header=True,
                 context_id=context_id,
             ):

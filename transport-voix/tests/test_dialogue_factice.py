@@ -28,3 +28,13 @@ async def test_interrompre_et_clore_sont_journalises():
     assert client_dialogue.interruptions == [(conversation, "Bonjour, comment")]
     assert client_dialogue.clotures == [conversation]
     assert episode_capture is True
+
+
+def test_le_client_rest_a_un_timeout_de_lecture_genereux():
+    """Le défaut httpx (5 s) tuait le stream du premier tour à froid
+    (prefill LLM > 5 s) — le timeout de lecture doit rester large."""
+    from app.dialogue.rest import ClientDialogueREST
+
+    client = ClientDialogueREST("http://127.0.0.1:8600")
+    assert client._client.timeout.read >= 60
+    assert client._client.timeout.connect <= 15

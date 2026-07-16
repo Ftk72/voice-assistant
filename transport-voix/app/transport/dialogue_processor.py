@@ -11,6 +11,11 @@ TTS. Ici le « cerveau » n'est pas un LLM OpenAI mais le **Dialogue Forge**
 - il joue un tour via le client Dialogue Forge et **pousse chaque phrase** en
   aval sous forme de `TextFrame`, que le TTS synthétise (le DF segmente déjà
   phrase par phrase, ADR 0010) ;
+- il applique la **voix portée par le flux** (ADR 0012 décision 5) : chaque
+  phrase du NDJSON porte sa voix courante ; quand elle change, le processeur
+  émet un `TTSUpdateSettingsFrame` (mécanisme Pipecat officiel de changement de
+  réglage TTS en cours de pipeline) **avant** le `TextFrame` concerné, si bien
+  que le TTS synthétise ce tour avec la bonne voix ;
 - sur interruption (`InterruptionFrame`), il signale au DF le préfixe
   réellement prononcé pour qu'il tronque son dernier tour (ADR 0012 décision 3).
 
@@ -28,20 +33,32 @@ from pipecat.frames.frames import (
     LLMFullResponseStartFrame,
     TextFrame,
     TranscriptionFrame,
+    TTSUpdateSettingsFrame,
 )
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
+from pipecat.services.settings import TTSSettings
 
 from app.dialogue.base import ClientDialogue, FinTour, Phrase
+from app.transport.selecteur_voix import SelecteurVoix
 
 
 class ProcesseurDialogueForge(FrameProcessor):
     """Pont Pipecat ↔ Dialogue Forge (remplace l'étage LLM du pipeline)."""
 
-    def __init__(self, dialogue: ClientDialogue, *, persona: str | None = None) -> None:
+    def __init__(
+        self,
+        dialogue: ClientDialogue,
+        *,
+        persona: str | None = None,
+        voix_defaut: str,
+    ) -> None:
         super().__init__()
         self._dialogue = dialogue
         self._persona = persona
         self._conversation: str | None = None
+        # Suit la voix appliquée au TTS pour n'émettre un TTSUpdateSettingsFrame
+        # que lorsque le flux change de voix (départ = voix de montage du TTS).
+        self._selecteur_voix = SelecteurVoix(voix_defaut)
         # Phrases dépêchées au TTS pour le tour en cours (base du préfixe
         # prononcé signalé au DF en cas d'interruption).
         self._phrases_en_cours: list[str] = []
@@ -69,6 +86,13 @@ class ProcesseurDialogueForge(FrameProcessor):
         await self.push_frame(LLMFullResponseStartFrame())
         async for evenement in self._dialogue.jouer_tour(self._conversation, texte_utilisateur):
             if isinstance(evenement, Phrase):
+                # Applique la voix du flux avant la phrase : si elle diffère de
+                # la voix courante du TTS, on la met à jour d'abord.
+                voix = self._selecteur_voix.changement(evenement.voix)
+                if voix is not None:
+                    await self.push_frame(
+                        TTSUpdateSettingsFrame(delta=TTSSettings(voice=voix))
+                    )
                 self._phrases_en_cours.append(evenement.texte)
                 await self.push_frame(TextFrame(evenement.texte))
             elif isinstance(evenement, FinTour):
