@@ -132,5 +132,11 @@ class _RealChatterboxEngine:
                 cfg_weight=cfg_weight,
             )
         buffer = io.BytesIO()
-        torchaudio.save(buffer, wav, self._model.sr, format="wav")
+        # PCM 16 bits explicite : par défaut torchaudio sauve le tenseur en
+        # float32 (code de format WAV 3, données à l'offset 80), que les clients
+        # OpenAI-compat lisent comme du PCM 16 bits → grésillement constaté au
+        # premier run réel du transport voix (2026-07-10).
+        torchaudio.save(
+            buffer, wav, self._model.sr, format="wav", encoding="PCM_S", bits_per_sample=16
+        )
         return buffer.getvalue()
