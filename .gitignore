@@ -19,3 +19,6 @@ voices/*
 
 # Secrets locaux (SEARXNG_SECRET…)
 .env
+
+# Config personnelle du Pont hôte (host-bridge/catalog.example.toml reste versionné)
+host-bridge/catalog.toml

@@ -24,9 +24,9 @@ else
 fi
 
 echo "=== 2/4 STT : Whisper large-v3-turbo Q5_0 (~570 Mo) ==="
-# Remplace Voxtral (2026-07-07, écart à l'ADR 0001 — voir docs/impasses.md :
-# le mode [TRANSCRIBE] n'existe pas dans llama.cpp, le modèle « répondait »
-# à la parole). Servi par whisper.cpp compilé sm_120 (stt/Dockerfile).
+# Écart à l'ADR 0001 (2026-07-07, voir docs/impasses.md pour l'historique du
+# remplacement de l'ancien moteur STT). Servi par whisper.cpp compilé sm_120
+# (stt/Dockerfile).
 if [ -f models/stt/ggml-large-v3-turbo-q5_0.bin ]; then
   echo "déjà présent — sauté"
 else

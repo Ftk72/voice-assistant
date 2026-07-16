@@ -1,6 +1,7 @@
 # Assistant vocal local — 10 services (dont 4 sur mesure : voice-forge, memory,
 # world, time ; le Pont hôte tourne hors Docker — ADR 0008). Voir docs/adr/.
-# Seul OpenWebUI est publié ; tous les ports hôte sont liés à 127.0.0.1.
+# Tous les ports hôte sont liés à 127.0.0.1 (debug uniquement — la coquille
+# consomme les forges en HTTP, ADR 0009).
 # Prérequis : modèles téléchargés via scripts/download-models.sh (voir README).
 
 x-gpu: &gpu
@@ -13,48 +14,6 @@ x-gpu: &gpu
             capabilities: [gpu]
 
 services:
-  openwebui:
-    # v0.10.2 figée par digest (image déjà tirée le 2026-07-06).
-    image: ghcr.io/open-webui/open-webui@sha256:9fcea9c6e32ab60b0498f3986c6cdf651ddbe61db48d2213a3d28048ddd673d4
-    ports:
-      - "127.0.0.1:3000:8080"
-    environment:
-      # LLM (llama.cpp expose une API OpenAI)
-      OPENAI_API_BASE_URL: http://llm:8080/v1
-      OPENAI_API_KEY: sk-local
-      ENABLE_OLLAMA_API: "false"
-      # STT — moteur « openai » pointé sur le conteneur Voxtral
-      AUDIO_STT_ENGINE: openai
-      AUDIO_STT_OPENAI_API_BASE_URL: http://stt:8080/v1
-      AUDIO_STT_OPENAI_API_KEY: sk-local
-      AUDIO_STT_MODEL: voxtral-mini
-      # TTS — moteur « openai » pointé sur le Voice Forge
-      AUDIO_TTS_ENGINE: openai
-      AUDIO_TTS_OPENAI_API_BASE_URL: http://voice-forge:8100/v1
-      AUDIO_TTS_OPENAI_API_KEY: sk-local
-      AUDIO_TTS_MODEL: tts-1
-      # RAG — embeddings via le service bge-m3, sinon OpenWebUI télécharge ses
-      # propres modèles sentence-transformers depuis HuggingFace (~1 Go, constaté
-      # au premier lancement du 2026-07-06 — voir docs/impasses.md).
-      RAG_EMBEDDING_ENGINE: openai
-      RAG_OPENAI_API_BASE_URL: http://embedder:8080/v1
-      RAG_OPENAI_API_KEY: sk-local
-      RAG_EMBEDDING_MODEL: bge-m3
-      # Souveraineté : force HF_HUB_OFFLINE=1 — plus aucun téléchargement HF possible.
-      OFFLINE_MODE: "true"
-      # NB : ces variables ne sont lues qu'au premier démarrage (PersistentConfig) ;
-      # ensuite la config vit dans la base d'OpenWebUI (Admin → Settings → Audio).
-    volumes:
-      - open-webui-data:/app/backend/data
-    depends_on:
-      llm:
-        condition: service_healthy
-      stt:
-        condition: service_healthy
-      voice-forge:
-        condition: service_healthy
-    restart: unless-stopped
-
   llm:
     # Qwen3.6-35B-A3B Q4_K_M, experts MoE déchargés en RAM (~6 Go VRAM, ADR 0004)
     # tag « server-cuda » figé par digest (image déjà tirée le 2026-07-06).
@@ -79,12 +38,11 @@ services:
     restart: unless-stopped
 
   stt:
-    # Whisper large-v3-turbo via whisper.cpp (~1 Go VRAM) — remplace Voxtral
-    # (écart à l'ADR 0001, 2026-07-07) : le mode [TRANSCRIBE] de Voxtral n'existe
-    # pas dans llama.cpp et le modèle « répond » à la parole au lieu de la
-    # transcrire (voir docs/impasses.md). Image compilée localement pour sm_120
+    # Whisper large-v3-turbo via whisper.cpp (~1 Go VRAM) — écart à l'ADR 0001
+    # (2026-07-07, voir docs/impasses.md pour l'historique du remplacement de
+    # l'ancien moteur STT). Image compilée localement pour sm_120
     # (stt/Dockerfile) ; --inference-path rend l'API compatible OpenAI ;
-    # --convert accepte le mp3 envoyé par OpenWebUI.
+    # --convert accepte les formats audio compressés en entrée.
     build: ./stt
     command: >-
       --model /models/ggml-large-v3-turbo-q5_0.bin
@@ -316,25 +274,7 @@ services:
       start_period: 30s
     restart: unless-stopped
 
-  # TURN/STUN local (souverain) — relais media WebRTC du transport voix.
-  # Le navigateur et Pipecat forcent le mode « relay » et passent par ce coturn,
-  # joignable en 127.0.0.1 via le proxy de ports de Docker Desktop (ce qui
-  # contourne aussi le pare-feu Hyper-V du pont WSL2↔Windows). Cf. ADR 0012 et
-  # docs/impasses.md (media WebRTC WSL2↔Windows).
-  coturn:
-    image: coturn/coturn:4.14
-    command: ["-c", "/etc/coturn/turnserver.conf"]
-    # Réseau host : les adresses de relais de coturn sont de vraies adresses
-    # hôte (fini le NAT bridge 172.x et le mapping de ports). En WSL mirrored,
-    # l'hôte est partagé avec Windows → navigateur et Pipecat joignent les
-    # relais directement. Cf. docs/impasses.md (media WebRTC WSL2↔Windows).
-    network_mode: host
-    volumes:
-      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
-    restart: unless-stopped
-
 volumes:
-  open-webui-data:
   voice-forge-cache:
   neo4j-data:
   time-forge-data:
