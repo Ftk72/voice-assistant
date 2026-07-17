@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 
 from app.config import Settings
@@ -7,6 +9,17 @@ from app.main import create_app
 
 def _jouer(client, cid, texte):
     return client.post(f"/conversations/{cid}/tours", json={"texte": texte})
+
+
+def _voix_des_phrases(reponse_tour):
+    """Voix portées par les phrases du flux NDJSON d'un tour (ADR 0012 déc. 5)."""
+    return [
+        evenement["voix"]
+        for ligne in reponse_tour.text.splitlines()
+        if ligne
+        for evenement in [json.loads(ligne)]
+        if evenement["type"] == "phrase"
+    ]
 
 
 def test_creation_de_conversation_avec_persona(client):
@@ -113,6 +126,32 @@ def test_la_cloture_retire_la_conversation(client):
 
 def test_clore_une_conversation_inconnue_404(client):
     assert client.post("/conversations/inexistante/clore").status_code == 404
+
+
+# --- Dérogation de voix (ADR 0012 décision 5) ------------------------------
+
+
+def test_sans_derogation_les_phrases_portent_la_voix_du_persona(client):
+    client.app.state.llm.tours = [TourTexte("Une phrase.")]
+    cid = client.post("/conversations", json={"persona": "batman"}).json()["id"]
+    assert _voix_des_phrases(_jouer(client, cid, "Parle.")) == ["Batman"]
+
+
+def test_la_derogation_de_voix_s_applique_au_tour_suivant(client):
+    client.app.state.llm.tours = [TourTexte("Une phrase.")]
+    cid = client.post("/conversations", json={"persona": "batman"}).json()["id"]
+
+    reponse = client.post(f"/conversations/{cid}/voix", json={"voix": "Emma"})
+    assert reponse.status_code == 200
+    assert reponse.json() == {"voix": "Emma"}
+
+    # La voix dérogée déroge à celle du persona (Batman) pour ce tour.
+    assert _voix_des_phrases(_jouer(client, cid, "Parle.")) == ["Emma"]
+
+
+def test_deroger_une_conversation_inconnue_404(client):
+    reponse = client.post("/conversations/inexistante/voix", json={"voix": "Emma"})
+    assert reponse.status_code == 404
 
 
 # --- Interruption (ADR 0012 décision 3) ------------------------------------

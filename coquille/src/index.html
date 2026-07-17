@@ -22,6 +22,16 @@
       <!-- Piste audio de retour de l'assistant. -->
       <audio id="audio" autoplay></audio>
 
+      <!-- Module d'interface du dialogue (A4) : page servie par le Dialogue
+           Forge (ADR 0009 — chaque forge sert son UI). La console ne fait que
+           l'héberger et lui relayer le fil RTVI (postMessage). -->
+      <iframe
+        id="dialogue"
+        class="dialogue"
+        src="http://127.0.0.1:8600/dialogue"
+        title="Module dialogue"
+      ></iframe>
+
       <pre id="journal" aria-label="Journal technique"></pre>
     </main>
 

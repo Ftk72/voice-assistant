@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Module dialogue</title>
+    <link rel="stylesheet" href="/dialogue/dialogue.css" />
+  </head>
+  <body>
+    <header class="barre">
+      <label class="menu">
+        Persona
+        <!-- Changer de persona = nouvelle conversation (persona pilote). -->
+        <select id="menu-persona"></select>
+      </label>
+      <label class="menu">
+        Voix
+        <!-- Déroge à la voix du persona pour la conversation en cours ;
+             effet au tour suivant (ADR 0012 décision 5). -->
+        <select id="menu-voix"></select>
+      </label>
+      <span id="etat-conversation" class="etat">—</span>
+    </header>
+
+    <main>
+      <!-- Fil de conversation : phrases affichées au moment où leur synthèse
+           est jouée (RTVI, ADR 0010 décision 5) ; interrompues jamais montrées. -->
+      <ol id="fil" class="fil" aria-live="polite"></ol>
+    </main>
+
+    <footer id="outils" class="outils" hidden>
+      <span class="outils-titre">Outils appelés</span>
+      <ul id="liste-outils"></ul>
+    </footer>
+
+    <script src="/dialogue/dialogue.js"></script>
+  </body>
+</html>

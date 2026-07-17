@@ -4,7 +4,14 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from app.schemas import ConversationVue, CreerConversation, Interruption, PersonaRef, TourIn
+from app.schemas import (
+    ConversationVue,
+    CreerConversation,
+    DerogationVoix,
+    Interruption,
+    PersonaRef,
+    TourIn,
+)
 
 router = APIRouter()
 
@@ -31,6 +38,8 @@ def creer_conversation(corps: CreerConversation, request: Request) -> dict[str, 
         "persona": personas[cle].nom,
         "cle_persona": cle,
         "historique": [],
+        # Aucune dérogation au départ : les phrases portent la voix du persona.
+        "voix_derogee": None,
     }
     return {"id": identifiant}
 
@@ -58,11 +67,28 @@ async def jouer_tour(identifiant: str, corps: TourIn, request: Request) -> Strea
 
     async def flux():
         async for evenement in orchestrateur.jouer_tour(
-            persona, conversation["historique"], corps.texte
+            persona,
+            conversation["historique"],
+            corps.texte,
+            voix=conversation.get("voix_derogee"),
         ):
             yield json.dumps(evenement, ensure_ascii=False) + "\n"
 
     return StreamingResponse(flux(), media_type="application/x-ndjson")
+
+
+@router.post("/conversations/{identifiant}/voix")
+def deroger_voix(
+    identifiant: str, corps: DerogationVoix, request: Request
+) -> dict[str, str]:
+    """Déroge la voix du persona pour la conversation en cours (ADR 0012
+    décision 5) : effet au **tour suivant** (le tour en cours de synthèse garde
+    sa voix). La coquille pilote ce menu ; le persona, lui, reste inchangé."""
+    conversation = request.app.state.conversations.get(identifiant)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation inconnue")
+    conversation["voix_derogee"] = corps.voix
+    return {"voix": corps.voix}
 
 
 @router.post("/conversations/{identifiant}/interrompre")

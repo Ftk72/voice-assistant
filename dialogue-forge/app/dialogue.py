@@ -96,13 +96,23 @@ class Orchestrateur:
         return {"role": "user", "content": f"{PREFIXE_CONTEXTE_MEMOIRE}\n{rappel}"}
 
     async def jouer_tour(
-        self, persona: Persona, historique: list[Message], texte_utilisateur: str
+        self,
+        persona: Persona,
+        historique: list[Message],
+        texte_utilisateur: str,
+        *,
+        voix: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Joue un tour et streame des événements NDJSON-ready :
         `{"type": "phrase", "texte": ...}` au fil de l'eau, puis un unique
         `{"type": "fin", "reponse": <texte complet>}`. Met à jour `historique`
         (contexte mémoire éventuel + tour utilisateur + réponse) et capture
-        l'épisode en fin de tour."""
+        l'épisode en fin de tour.
+
+        `voix` déroge à la voix du persona pour ce tour (ADR 0012 décision 5) :
+        None = voix du persona ; sinon la voix dérogée est portée par chaque
+        phrase du flux, à charge du transport de l'appliquer au TTS."""
+        voix_du_tour = voix or persona.voix
         # (a) Injection : faits pertinents à partir du texte utilisateur.
         faits = await self._memoire.rechercher(texte_utilisateur)
         message_contexte = self._construire_message_contexte(faits)
@@ -128,13 +138,13 @@ class Orchestrateur:
                 if isinstance(evenement, DeltaTexte):
                     contenu += evenement.texte
                     for phrase in segmenteur.absorber(evenement.texte):
-                        yield {"type": "phrase", "texte": phrase, "voix": persona.voix}
+                        yield {"type": "phrase", "texte": phrase, "voix": voix_du_tour}
                 else:
                     appels.append(evenement)
 
             if not appels:
                 for phrase in segmenteur.terminer():
-                    yield {"type": "phrase", "texte": phrase, "voix": persona.voix}
+                    yield {"type": "phrase", "texte": phrase, "voix": voix_du_tour}
                 reponse = contenu
                 break
 
@@ -159,6 +169,10 @@ class Orchestrateur:
                 }
             )
             for appel in appels:
+                # Le module d'interface (A4) affiche les outils appelés ; le DF
+                # remplace l'étage LLM, donc c'est son flux — pas RTVI — qui doit
+                # porter l'info (ticket 0008). Émis au déclenchement de l'appel.
+                yield {"type": "outil", "nom": appel.nom}
                 try:
                     arguments = json.loads(appel.arguments) if appel.arguments else {}
                 except json.JSONDecodeError:

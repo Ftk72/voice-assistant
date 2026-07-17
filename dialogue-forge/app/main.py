@@ -13,6 +13,7 @@ from app.outils.base import MoteurOutils
 from app.outils.fake import OutilsFactices
 from app.personas import charger_personas
 from app.routes.api import router
+from app.routes.module_dialogue import router as router_module_dialogue
 
 logger = logging.getLogger(__name__)
 
@@ -71,4 +72,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.orchestrateur = orchestrateur
     app.state.conversations = {}
     app.include_router(router)
+    app.include_router(router_module_dialogue)
     return app

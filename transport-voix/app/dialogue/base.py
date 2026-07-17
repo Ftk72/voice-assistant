@@ -17,6 +17,17 @@ class Phrase:
 
 
 @dataclass
+class AppelOutilVu:
+    """Un appel d'outil déclenché par le Dialogue Forge pendant le tour, à
+    signaler à l'interface (indicateur d'outils appelés, module A4 / ticket
+    0008). Le DF remplace l'étage LLM du pipeline : ses appels d'outils
+    n'apparaissent donc pas dans les événements RTVI natifs — c'est son flux
+    NDJSON qui les porte, et le transport les relaie au client."""
+
+    nom: str
+
+
+@dataclass
 class FinTour:
     """Marque la fin d'un tour de dialogue, avec la réponse complète."""
 
@@ -33,9 +44,12 @@ class ClientDialogue(ABC):
         """Crée une conversation, renvoie son identifiant."""
 
     @abstractmethod
-    def jouer_tour(self, conversation: str, texte: str) -> AsyncIterator[Phrase | FinTour]:
+    def jouer_tour(
+        self, conversation: str, texte: str
+    ) -> AsyncIterator[Phrase | AppelOutilVu | FinTour]:
         """Joue un tour de dialogue : streame les `Phrase` à synthétiser (chacune
-        avec sa voix courante) puis un `FinTour` final."""
+        avec sa voix courante) et les `AppelOutilVu` au fil de leur déclenchement,
+        puis un `FinTour` final."""
 
     @abstractmethod
     async def interrompre(self, conversation: str, prefixe_prononce: str) -> None:

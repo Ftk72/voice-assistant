@@ -1,0 +1,104 @@
+:root {
+  color-scheme: light dark;
+  --fond: #f7f7f8;
+  --encre: #1b1b1f;
+  --tenu: #6b6b74;
+  --assistant: #e9eefc;
+  --utilisateur: #e7f3ea;
+  --bord: #d9d9e0;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fond: #1b1b1f;
+    --encre: #ececf1;
+    --tenu: #a0a0ac;
+    --assistant: #24304d;
+    --utilisateur: #21362a;
+    --bord: #35353d;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font: 15px/1.5 system-ui, sans-serif;
+  color: var(--encre);
+  background: var(--fond);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.barre {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--bord);
+}
+.menu {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.72rem;
+  color: var(--tenu);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.menu select {
+  margin-top: 0.2rem;
+  font-size: 0.9rem;
+  padding: 0.25rem 0.4rem;
+}
+.etat {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--tenu);
+}
+
+main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.9rem;
+}
+.fil {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.tour {
+  max-width: 80%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.9rem;
+  white-space: pre-wrap;
+}
+.tour.utilisateur {
+  align-self: flex-end;
+  background: var(--utilisateur);
+  border-bottom-right-radius: 0.2rem;
+}
+.tour.assistant {
+  align-self: flex-start;
+  background: var(--assistant);
+  border-bottom-left-radius: 0.2rem;
+}
+
+.outils {
+  border-top: 1px solid var(--bord);
+  padding: 0.5rem 0.9rem;
+  font-size: 0.82rem;
+  color: var(--tenu);
+}
+.outils-titre {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+}
+.outils ul {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+}

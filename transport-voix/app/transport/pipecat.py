@@ -59,6 +59,7 @@ class TransportPipecat(Transport):
         from pipecat.pipeline.pipeline import Pipeline
         from pipecat.pipeline.worker import PipelineParams, PipelineWorker
         from pipecat.processors.audio.vad_processor import VADProcessor
+        from pipecat.processors.frameworks.rtvi import RTVIProcessor
         from pipecat.services.openai.stt import OpenAISTTService
         from pipecat.transcriptions.language import Language
         from pipecat.transports.base_transport import TransportParams
@@ -127,10 +128,24 @@ class TransportPipecat(Transport):
             ]
         )
 
-        # RTVIProcessor + RTVIObserver sont ajoutés **par défaut** par
-        # PipelineWorker (événements transcriptions/phrases vers le client) : ne
-        # pas les recâbler à la main (Pipecat 1.5 les dédoublonne et avertit).
-        worker = PipelineWorker(pipeline, params=PipelineParams(enable_metrics=True))
+        # RTVIProcessor explicite : on a besoin d'une référence pour recevoir les
+        # **commandes de la page** (module A4 — changer de persona). Le passer à
+        # PipelineWorker via `rtvi_processor=` est la voie sanctionnée : le worker
+        # le prépend lui-même au pipeline et crée l'observer (pas de recâblage
+        # manuel, pas de doublon). Le client envoie un `client-message`
+        # `{t:"persona", d:{nom}}` ; le handler recrée la conversation (le nouvel
+        # id est republié par le processeur, la page l'adopte).
+        rtvi = RTVIProcessor()
+
+        @rtvi.event_handler("on_client_message")
+        async def _sur_commande(_rtvi: object, frame: object) -> None:
+            # frame : RTVIClientMessageFrame(type=<t>, data=<d>).
+            if frame.type == "persona" and frame.data:
+                processeur_df.changer_persona(frame.data["nom"])
+
+        worker = PipelineWorker(
+            pipeline, params=PipelineParams(enable_metrics=True), rtvi_processor=rtvi
+        )
 
         @transport.event_handler("on_client_connected")
         async def _connecte(_transport: object, _client: object) -> None:

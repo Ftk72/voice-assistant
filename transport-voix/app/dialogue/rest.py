@@ -4,8 +4,9 @@
 Forge tel que finalisé dans un lot parallèle (ne pas modifier ce contrat
 depuis ce composant) : `POST /conversations` crée une conversation,
 `POST /conversations/{id}/tours` streame du NDJSON (une ligne JSON par
-événement : `{"type":"phrase","texte":...,"voix":...}` puis
-`{"type":"fin","reponse":...}`), `POST /conversations/{id}/interrompre` et
+événement : `{"type":"phrase","texte":...,"voix":...}`, `{"type":"outil",
+"nom":...}` à chaque appel d'outil, puis `{"type":"fin","reponse":...}`),
+`POST /conversations/{id}/interrompre` et
 `POST /conversations/{id}/clore` sont de simples appels ponctuels.
 """
 
@@ -14,7 +15,7 @@ from collections.abc import AsyncIterator
 
 import httpx
 
-from app.dialogue.base import ClientDialogue, FinTour, Phrase
+from app.dialogue.base import AppelOutilVu, ClientDialogue, FinTour, Phrase
 
 
 class ClientDialogueREST(ClientDialogue):
@@ -46,6 +47,8 @@ class ClientDialogueREST(ClientDialogue):
                 evenement = json.loads(ligne)
                 if evenement["type"] == "phrase":
                     yield Phrase(texte=evenement["texte"], voix=evenement["voix"])
+                elif evenement["type"] == "outil":
+                    yield AppelOutilVu(nom=evenement["nom"])
                 elif evenement["type"] == "fin":
                     yield FinTour(reponse=evenement["reponse"])
 

@@ -33,8 +33,12 @@ docs, commits.
   croyances des handoffs se vérifient, ne se croient pas.
 - Toute piste morte se capture à chaud dans `docs/impasses.md` (`/impasses`) ;
   consulter ce registre avant tout diagnostic.
+- Toute commande que **l'utilisateur** doit exécuter suit `/newbie` : une fenêtre
+  par bloc, environnement déclaré, bloc autonome (état + `cd` + commande dans une
+  seule zone copiable), sort de la fenêtre et signe de succès. Rien ne s'écrit
+  sans être sourcé — la topologie ci-dessous fait foi, jamais la supposition.
 
-## Conventions des forges (dialogue-forge à naître, voice-forge, memory-forge, world-forge, time-forge, host-bridge)
+## Conventions des forges (dialogue-forge, voice-forge, memory-forge, world-forge, time-forge, host-bridge)
 
 - Python 3.12, uv ; `uv sync` puis `uv run pytest` et `uv run ruff check .`
   dans chaque composant — tout doit rester vert.
@@ -59,6 +63,36 @@ docs, commits.
 
 ## Plateforme (pièges permanents — le détail vit dans docs/impasses.md)
 
+### Topologie (source des blocs `/newbie`)
+
+- **Deux environnements** : **WSL** (Ubuntu-24.04) et **PowerShell 5.1**
+  (`5.1.26100.x`, pas de pwsh installé → **`&&` n'est jamais valide** : enchaîner
+  par lignes séparées ou `;`).
+- **Le dépôt n'existe qu'en WSL** (`~/voice-assistant`). Les process natifs
+  Windows le lisent via
+  `\\wsl.localhost\Ubuntu-24.04\home\ftk\voice-assistant\<composant>` — donc
+  toute modification du code côté WSL exige de **relancer le process Windows**
+  (Ctrl+C + relance) pour qu'elle prenne effet.
+- **Qui tourne où** : les forges en **Docker/WSL** (`docker compose`, `uv run
+  pytest`, `ruff` → WSL) ; **transport-voix** (Pipecat) et **coquille** (Tauri)
+  en **natif Windows** → PowerShell.
+- **État requis côté Windows** (à poser dans la fenêtre, sinon échec silencieux) :
+  - transport : `$env:UV_PROJECT_ENVIRONMENT="C:\venvs\transport-voix"` (venv
+    séparé du `.venv` Linux — sans lui, `uv` vise le venv Linux) **et** les 4
+    `TRANSPORT_VOIX_*_BACKEND` (sans eux : adaptateurs factices, logs identiques
+    à un démarrage correct, mais rien ne parle) ; lancer avec
+    `uv run --extra pipecat python -m app` — **sans l'extra, uv re-synchronise et
+    désinstalle pipecat** (impasse 2026-07-16, qui corrige le §Setup du
+    handoff 0014 : le registre prime sur les handoffs) ;
+  - coquille : `$env:CARGO_TARGET_DIR="C:\cargo-target\coquille"`.
+  - Prérequis WSL : la stack Docker doit tourner (STT 8002, TTS 8100, DF 8600).
+- Ports hôte (`docker-compose.yml`) : LLM 8001, STT 8002, embedder 8003,
+  voice-forge 8100, memory 8200, world 8300, time 8400, dialogue **8600**,
+  searxng 8080, Neo4j 7474/7687 — plus **transport-voix 8700**, natif Windows
+  (hors compose).
+
+### Matériel et système
+
 - **RTX 5080 = Blackwell sm_120** : aucun binaire CUDA ne se présume
   compatible avant un test réel (torch < 2.8, images officielles whisper.cpp
   et consorts en sont morts). Compilations Docker : toujours borner `-j`.
@@ -73,8 +107,14 @@ docs, commits.
 
 L'ancienne stack (OpenWebUI) a été **validée de bout en bout le 2026-07-07**
 (voix, mémoire, annonces sur enceintes) puis abandonnée par l'ADR 0009 : ses
-mesures servent de référence (latence voix→voix 2,88 s, STT 0,15-0,5 s,
-TTS ~2 s, LLM ~33 tok/s). La nouvelle stack (Dialogue Forge, Pipecat, coquille)
-n'existe pas encore. Adaptateurs réels jamais exécutés à ce jour :
-`SubprocessRunner` (host-bridge) et `_RealQwen3TTSEngine` (voice-forge) — ne
-pas les présenter comme fonctionnels.
+mesures servent de référence historique (latence voix→voix 2,88 s, STT
+0,15-0,5 s, TTS ~2 s, LLM ~33 tok/s). La nouvelle stack (Dialogue Forge,
+Pipecat, coquille) **existe et parle** : le contrat de l'ADR 0012 est livré et
+la chaîne voix a été débuggée **maillon par maillon** au 2026-07-16 (fixes TTS
+strip WAV / `NormaliseurWavPCM16`, STT français explicite, CORS coquille, VAD
+explicite pour Pipecat 1.5) — le **premier tour de parole passe dans la
+coquille**. Restent à qualifier en réel : multi-tours, fin par silence,
+interruption, et les mesures face aux références ci-dessus (ticket wayfinder
+0011). Adaptateurs réels jamais exécutés à ce jour : `SubprocessRunner`
+(host-bridge) et `_RealQwen3TTSEngine` (voice-forge) — ne pas les présenter
+comme fonctionnels.

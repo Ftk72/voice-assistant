@@ -59,6 +59,21 @@ wayfinder « plan, don't do ») jusqu'à la stack qui parle.
   pastille pilotée par les événements RTVI (console lit le canal, relaie l'état
   veille/écoute/parle par événement Tauri) ; **validé au réel le 2026-07-16**.
   Débloque 0008 (module dialogue).
+- [Run réel bout-en-bout](tickets/0003-run-reel-bout-en-bout.md) — la stack
+  **parle** au poste Windows (bouton → STT FR → Dialogue Forge → TTS → audio) ;
+  pièges levés (CORS, VAD 1.5, WAV float32, timeout httpx) ; STT TTFB 0,3-0,5 s.
+  Latence voix→voix en régime **restant à mesurer** (0011). Le grand débloqueur.
+- [Module dialogue (A4)](tickets/0008-module-dialogue-a4.md) — la conversation se
+  **suit depuis la console** : page servie par le DF en iframe, fil au timing de
+  synthèse, menus persona/voix pilotant la conversation **live**, indicateur
+  d'outils ; **validé au réel le 2026-07-17**. A exigé un canal de commande
+  bidirectionnel (page et transport tenaient deux conversations DF distinctes —
+  les menus ne commandaient rien). Reste : liste complète des voix enrôlées
+  (accès cross-forge à voice-forge, à cadrer).
+- [Docs racine v2](tickets/0002-docs-racine-v2.md) — documentation racine
+  réalignée ADR 0009 (README, ACCEPTANCE v2 = spec de 0011, plan de tests,
+  CLAUDE.md) ; OpenWebUI purgé des docs vivantes ; mesures anciennes gardées en
+  repères, cibles v2 en relatif (≤ 2 s).
 
 ## Pas encore spécifié
 

@@ -203,6 +203,30 @@ def test_la_boucle_d_outils_renvoie_le_resultat_au_llm(client):
     )
 
 
+def test_le_stream_annonce_chaque_outil_appele(client):
+    # Le module d'interface (A4) affiche les outils appelés. Comme le DF remplace
+    # l'étage LLM, cette info ne peut venir que de son propre flux : un événement
+    # `{"type":"outil","nom":...}` est émis pour chaque appel, au moment où il est
+    # déclenché (avant le résultat).
+    client.app.state.outils.definitions = [
+        {"type": "function", "function": {"name": "meteo", "description": "Météo"}}
+    ]
+    client.app.state.outils.resultats = {"meteo": "vingt-trois degrés et ensoleillé"}
+    client.app.state.llm.tours = [
+        TourOutils([AppelOutil(id="a1", nom="meteo", arguments='{"ville": "Paris"}')]),
+        TourTexte("Il fait vingt-trois degrés."),
+    ]
+    identifiant = _nouvelle_conversation(client)
+
+    reponse = client.post(
+        f"/conversations/{identifiant}/tours", json={"texte": "Quel temps fait-il ?"}
+    )
+    lignes = _lignes(reponse)
+
+    outils = [ligne["nom"] for ligne in lignes if ligne["type"] == "outil"]
+    assert outils == ["meteo"]
+
+
 def test_les_messages_de_la_boucle_d_outils_sont_persistes_dans_l_historique(client):
     client.app.state.outils.definitions = [
         {"type": "function", "function": {"name": "meteo", "description": "Météo"}}

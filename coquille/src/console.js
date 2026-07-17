@@ -7,6 +7,9 @@
 
 // Le transport voix (Pipecat) écoute en natif Windows, co-localisé.
 const URL_TRANSPORT = "http://127.0.0.1:8700";
+// Le Dialogue Forge sert le module d'interface (iframe ci-dessous) ; on lui
+// relaie le fil RTVI par postMessage, ciblé sur son origine.
+const URL_DIALOGUE = "http://127.0.0.1:8600";
 
 const bouton = document.getElementById("bouton");
 const etat = document.getElementById("etat");
@@ -14,6 +17,7 @@ const audio = document.getElementById("audio");
 const journal = document.getElementById("journal");
 
 let pc = null;
+let canal = null; // canal de données RTVI (ouvert dans demarrer)
 
 function tracer(msg) {
   journal.textContent += msg + "\n";
@@ -29,11 +33,44 @@ function emettreEtatPastille(nom) {
   window.__TAURI__?.event.emit("etat-pastille", nom);
 }
 
-// Traduit un message RTVI (Pipecat 1.5) en état de pastille. Le fil : messages
-// JSON `{label:"rtvi-ai", type, id, data}` envoyés bruts par le transport
-// (SmallWebRTC `send_app_message`) sur le canal de données. On ne retient que
-// les transitions veille/écoute/parle ; le reste (transcriptions, métriques,
-// texte TTS) n'a pas d'effet visuel sur la pastille.
+// Relaie un événement RTVI au module d'interface (page du Dialogue Forge, servie
+// en iframe). La console est la seule à tenir le canal de données ; elle
+// transmet le fil (transcriptions, phrases assistant, états) à la page qui,
+// elle, l'affiche. Aucune décision côté coquille (ADR 0009) : simple relais.
+function relayerAuDialogue(type, data) {
+  const iframe = document.getElementById("dialogue");
+  iframe?.contentWindow?.postMessage({ source: "rtvi", type, data }, URL_DIALOGUE);
+}
+
+// Sens montant : la page du module (iframe) remonte des **commandes** (ex.
+// changer de persona) ; la console est la seule à tenir le canal de données,
+// elle les émet donc en RTVI client-message vers le transport. Toujours pas de
+// décision côté coquille (ADR 0009) : simple relais dans l'autre sens.
+window.addEventListener("message", (e) => {
+  const m = e.data;
+  if (!m || m.source !== "commande") return;
+  if (!canal || canal.readyState !== "open") {
+    tracer("Commande ignorée (canal fermé) : " + m.type);
+    return;
+  }
+  canal.send(
+    JSON.stringify({
+      label: "rtvi-ai",
+      type: "client-message",
+      id: crypto.randomUUID(),
+      data: { t: m.type, d: m.data },
+    }),
+  );
+});
+
+// Traite un message RTVI (Pipecat 1.5). Le fil : messages JSON
+// `{label:"rtvi-ai", type, id, data}` envoyés bruts par le transport
+// (SmallWebRTC `send_app_message`) sur le canal de données. Deux usages :
+//   - la **pastille** ne retient que les transitions veille/écoute/parle ;
+//   - le **module d'interface** (page du Dialogue Forge en iframe) reçoit
+//     l'événement complet relayé — c'est lui qui affiche transcriptions et
+//     phrases assistant (au timing de synthèse). La coquille ne fait que
+//     relayer (ADR 0009).
 function traiterMessageRtvi(donnees) {
   let msg;
   try {
@@ -43,6 +80,7 @@ function traiterMessageRtvi(donnees) {
   }
   if (!msg || msg.label !== "rtvi-ai") return; // signalling & autres : ignorés
   tracer("RTVI: " + msg.type); // trace la voix du transport (types réellement émis)
+  relayerAuDialogue(msg.type, msg.data); // fil vif → module d'interface
   switch (msg.type) {
     case "bot-started-speaking":
       emettreEtatPastille("parle");
@@ -78,7 +116,7 @@ async function demarrer() {
   // Canal de données pour les événements RTVI (le transport s'attache au canal
   // que le client ouvre ; le label importe peu côté serveur). On y lit les
   // transitions veille/écoute/parle pour piloter la pastille.
-  const canal = pc.createDataChannel("pipecat");
+  canal = pc.createDataChannel("pipecat");
   canal.onmessage = (e) => traiterMessageRtvi(e.data);
 
   // Micro (getUserMedia — AEC/NS/AGC du moteur Chromium/WebView2, ADR 0010).
