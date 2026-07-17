@@ -18,6 +18,7 @@ const journal = document.getElementById("journal");
 
 let pc = null;
 let canal = null; // canal de données RTVI (ouvert dans demarrer)
+let fluxMicro = null; // micro de la conversation (rendu au raccrochage)
 
 function tracer(msg) {
   journal.textContent += msg + "\n";
@@ -31,6 +32,24 @@ function tracer(msg) {
 // décision côté coquille (ADR 0009).
 function emettreEtatPastille(nom) {
   window.__TAURI__?.event.emit("etat-pastille", nom);
+}
+
+// Annonce les transitions de conversation au mot d'éveil (`eveil.js`), qui tient
+// le micro de la veille et doit le rendre le temps d'une conversation. La console
+// reste seule maîtresse de la conversation : elle informe, elle ne délègue pas.
+function annoncerConversation(nom) {
+  window.dispatchEvent(new CustomEvent(nom));
+}
+
+// Rend le micro de la conversation et rouvre la veille. Appelé au raccrochage
+// comme sur les échecs de connexion survenus micro déjà pris — sans quoi le mot
+// d'éveil resterait suspendu jusqu'à la prochaine conversation réussie.
+function libererMicro() {
+  if (fluxMicro) {
+    fluxMicro.getTracks().forEach((t) => t.stop());
+    fluxMicro = null;
+  }
+  annoncerConversation("conversation-fermee");
 }
 
 // Relaie un événement RTVI au module d'interface (page du Dialogue Forge, servie
@@ -124,16 +143,29 @@ async function demarrer() {
   // l'audio de l'assistant sur la même piste. NE PAS ajouter de transceiver
   // « audio » supplémentaire, sinon Pipecat lit une piste vide et coupe la
   // réception après ~3 s (impasse consignée côté transport).
-  let flux;
   try {
-    flux = await navigator.mediaDevices.getUserMedia({ audio: true });
+    fluxMicro = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (err) {
     etat.textContent = "Micro indisponible : " + err.name;
     tracer("getUserMedia a échoué : " + err);
     bouton.disabled = false;
     return;
   }
-  flux.getTracks().forEach((t) => pc.addTrack(t, flux));
+  // Micro pris : la veille doit le rendre (elle tenait son propre flux 16 kHz).
+  annoncerConversation("conversation-ouverte");
+  fluxMicro.getTracks().forEach((t) => pc.addTrack(t, fluxMicro));
+
+  // À partir d'ici, tout échec doit rendre le micro et rouvrir la veille.
+  const abandonner = (message, detail) => {
+    etat.textContent = message;
+    if (detail !== undefined) tracer(detail);
+    if (pc) {
+      pc.close();
+      pc = null;
+    }
+    libererMicro();
+    bouton.disabled = false;
+  };
 
   const offre = await pc.createOffer();
   await pc.setLocalDescription(offre);
@@ -146,16 +178,12 @@ async function demarrer() {
       body: JSON.stringify({ sdp: offre.sdp, type: offre.type }),
     });
   } catch (err) {
-    etat.textContent = "Transport injoignable.";
-    tracer("POST /offer a échoué : " + err);
-    bouton.disabled = false;
+    abandonner("Transport injoignable.", "POST /offer a échoué : " + err);
     return;
   }
 
   if (!reponse.ok) {
-    etat.textContent = "Échec /offer : " + reponse.status;
-    tracer(await reponse.text());
-    bouton.disabled = false;
+    abandonner("Échec /offer : " + reponse.status, await reponse.text());
     return;
   }
 
@@ -180,6 +208,10 @@ function raccrocher() {
     audio.srcObject.getTracks().forEach((t) => t.stop());
     audio.srcObject = null;
   }
+  // `pc.close()` arrête les émetteurs mais NON les pistes de `getUserMedia` :
+  // sans ceci le micro restait chaud après un raccrochage, et la veille ne
+  // pouvait pas le reprendre.
+  libererMicro();
   etat.textContent = "En veille.";
   emettreEtatPastille("veille");
   bouton.textContent = "Parler";
@@ -187,3 +219,14 @@ function raccrocher() {
 }
 
 bouton.onclick = demarrer;
+
+// Point d'entrée du mot d'éveil (`eveil.js`, module ES chargé après ce script).
+// Le mot d'éveil OUVRE la conversation sans jamais filtrer les tours (ADR 0012
+// décision 1) : il appelle donc exactement ce que fait le clic du bouton, et
+// rien d'autre. Sans effet si une conversation est déjà en cours.
+window.coquilleEveil = {
+  ouvrir: () => {
+    if (!pc) demarrer();
+  },
+  tracer,
+};

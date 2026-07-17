@@ -5,6 +5,30 @@
 > supprimée : elle est marquée comme telle et redevient une prémisse à re-vérifier (`/premisses`).
 > Les contraintes permanentes (sans condition de validité) vont en ADR ou au CLAUDE.md, pas ici.
 
+## 2026-07-17 — WebView2/Chromium refuse WASM et les workers Blob sous `script-src 'self'` (échec SILENCIEUX)
+
+> **Valide tant que** la coquille sert du WASM (onnxruntime-web, mot d'éveil) et une CSP restrictive.
+
+- **Tenté** : câbler le mot d'éveil (moteur openWakeWord en WASM, ticket 0010) dans la webview avec la CSP en place (`script-src 'self'`).
+- **Ce qui bloque, en silence** : Chromium — donc WebView2 — refuse `WebAssembly.instantiate`/`compile` sous `script-src` sans **`'wasm-unsafe-eval'`** ; et le moteur crée son AudioWorklet depuis un **`Blob`** (`moteur.js` : `URL.createObjectURL(new Blob([...]))`), que `script-src` bloque aussi sans **`blob:`**. Aucune des deux ne lève d'erreur visible au bon endroit : c'est la même classe que le `frame-src` manquant du ticket 0008 (« iframe refusée en silence »).
+- **Levé en code** (à confirmer au run réel WebView2) : `tauri.conf.json` → `script-src 'self' 'wasm-unsafe-eval' blob:`. Le binaire ORT « threaded » retombe en **mono-thread** faute d'isolation cross-origin (COOP/COEP absents), sans conséquence sur des trames de 1280 échantillons — ne PAS ajouter COOP/COEP juste pour ça (ça casserait d'autres chargements same-origin).
+
+## 2026-07-17 — onnxruntime-web : `wasmPaths` relatif se redouble ; la glue `.mjs` doit être vendorée avec le `.wasm`
+
+> **Valide tant que** on charge onnxruntime-web vendoré depuis un sous-dossier (mot d'éveil, `coquille/src/eveil/ort/`).
+
+- **Tenté** : vendorer `ort.wasm.bundle.min.mjs` + le seul binaire `.wasm`, avec `ort.env.wasm.wasmPaths = "./eveil/ort/"`.
+- **Deux échecs cumulés au run réel** (`Failed to fetch dynamically imported module`) : (1) même le build « bundle » importe **dynamiquement la glue** `ort-wasm-simd-threaded.mjs` — non incluse, il faut la vendorer à côté du `.wasm` ; (2) ORT résout `wasmPaths` par rapport à **l'URL du bundle** (déjà `/eveil/ort/`), donc un chemin relatif `./eveil/ort/` se **redouble** en `/eveil/ort/eveil/ort/…`.
+- **Levé en code** : glue `.mjs` ajoutée dans `ort/` ; `wasmPaths` en chemin **absolu depuis la racine** (`/eveil/ort/`), immunisé au redoublement quelle que soit la base de résolution.
+
+## 2026-07-17 — les modèles openWakeWord ne sont PAS sur `huggingface.co/davidscripka/openwakeword` (dépôt vide)
+
+> **Valide tant que** on vendore des modèles openWakeWord ; récurrence de l'impasse 2026-07-02 (vérifier la source par API avant toute commande de téléchargement).
+
+- **Tenté (sur la foi de la note de recherche 0009)** : récupérer `melspectrogram/embedding_model/silero_vad.onnx` sur `huggingface.co/davidscripka/openwakeword`.
+- **Réalité (API HF)** : ce dépôt ne contient que `.gitattributes` + `README.md`, `usedStorage: 0` — **aucun modèle** ; il est de surcroît tagué `cc-by-nc-sa-4.0` alors que le moteur est Apache-2.0.
+- **Vraie source** : la **release GitHub `v0.5.1`** de `dscripka/openWakeWord` (assets `.onnx`), ou le **tarball npm `openwakeword-wasm-browser@0.1.1`** qui embarque moteur + modèles (byte-identiques à la release, sha256 comparés). C'est la source retenue. Détail : `coquille/src/eveil/PROVENANCE.md`. La note 0009 a été corrigée en place.
+
 ## ~~2026-07-09 — Pipecat `OpenAITTSService` rejette les voix hors énumération OpenAI~~ — LEVÉE EN CODE le 2026-07-09 (sous-classe `ServiceTTSVoiceForge`)
 
 > Condition de la « valide tant que » atteinte : on n'utilise plus `OpenAITTSService` tel quel. `transport-voix/app/transport/tts_voiceforge.py` (`ServiceTTSVoiceForge`) override `run_tts` — voix passée telle quelle (pas de check `VALID_VOICES`) et réponse routée par le helper Pipecat `_stream_audio_frames_from_iterator(strip_wav_header=True)`, qui retire l'en-tête WAV, **détecte le sample rate dedans** (octets 24-28) et rééchantillonne vers `self.sample_rate`. Prémisse « format voice-forge » tranchée : voice-forge renvoie du **WAV** (`media_type="audio/wav"`), **pas** du PCM comme le supposait `OpenAITTSService` — d'où l'usage du strip WAV plutôt qu'un simple retrait du check. 2 tests factices verts (voix hors énum acceptée + PCM reconstitué à l'identique après strip). **Jamais exécuté bout-en-bout** : reste à confirmer au premier run réel (annonce d'accueil audible via WebRTC). Vigilance jumelle `OpenAISTTService` (whisper.cpp) **tranchée par inspection** : PAS de rigidité type-TTS (aucun rejet client avant réseau ; `verbose_json` gaté derrière `_include_prob_metrics=False`, donc requête `json` simple → `{"text":…}` lu correctement). Un seul défaut latent trouvé et corrigé : le STT était construit **sans langue** → défaut `Language.EN` sur un assistant 100 % français ; câblé sur `Language(s.langue)` (= FR) dans `pipecat.py`.

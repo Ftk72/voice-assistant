@@ -36,5 +36,11 @@
     </main>
 
     <script src="console.js"></script>
+    <!-- Mot d'éveil (ticket 0010) : détection continue dans la webview, modèle
+         vendoré local, zéro CDN (ADR 0012 décision 2). Module ES chargé APRÈS
+         console.js — il s'appuie sur le point d'entrée que celui-ci expose. Son
+         échec de chargement est sans conséquence : le bouton reste le chemin
+         nominal. -->
+    <script type="module" src="eveil.js"></script>
   </body>
 </html>

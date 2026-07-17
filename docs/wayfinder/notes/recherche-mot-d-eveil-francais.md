@@ -63,10 +63,18 @@ Raisonnement :
    `VoixDeTest` pour varier le timbre) + négatifs (bruit, parole française
    générique). Sortie : un `.onnx` par mot-clé retenu.
 2. **Vendorer dans le dépôt** (`coquille/` — ADR 0009, module d'interface) :
+   > **CORRECTION 2026-07-17 (intégration, ticket 0010)** : la source HF
+   > indiquée ci-dessous est **fausse** — `huggingface.co/davidscripka/openwakeword`
+   > est **vide** (`.gitattributes` + `README.md`, `usedStorage: 0`, tagué
+   > `cc-by-nc-sa-4.0`). C'est la récurrence exacte de l'impasse 2026-07-02. La
+   > vraie source des modèles partagés est la **release GitHub `v0.5.1`** de
+   > `dscripka/openWakeWord` (Apache-2.0), qui les porte en assets — ou, plus
+   > simple, le **tarball npm `openwakeword-wasm-browser@0.1.1`** qui embarque à
+   > la fois le moteur ET les modèles (byte-identiques à la release, sha256
+   > vérifiés). Détail dans `coquille/src/eveil/PROVENANCE.md`.
    - `melspectrogram.onnx`, `embedding_model.onnx` (partagés, fournis par
-     openWakeWord — à récupérer sur `huggingface.co/davidscripka/openwakeword`,
-     vérifier les noms de fichiers exacts via l'API HF avant de coller une
-     commande, cf. leçon `docs/impasses.md` 2026-07-02) ;
+     openWakeWord — ~~à récupérer sur `huggingface.co/davidscripka/openwakeword`~~,
+     cf. correction ci-dessus, `docs/impasses.md` 2026-07-02) ;
    - `silero_vad.onnx` (VAD, même source) ;
    - le `.onnx` du mot d'éveil français entraîné à l'étape 1 ;
    - les fichiers wasm/js d'`onnxruntime-web` (récupérables depuis le paquet

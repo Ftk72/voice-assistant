@@ -36,7 +36,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:8700 ws://127.0.0.1:8700; media-src 'self' blob: mediastream:; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-src http://127.0.0.1:8600"
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:8700 ws://127.0.0.1:8700; media-src 'self' blob: mediastream:; img-src 'self' data:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; frame-src http://127.0.0.1:8600"
     }
   },
   "bundle": {
