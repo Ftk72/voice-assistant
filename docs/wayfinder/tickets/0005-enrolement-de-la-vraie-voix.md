@@ -1,6 +1,6 @@
 ---
 label: wayfinder:task
-statut: ouvert
+statut: clos
 assigne: agent principal (session 2026-07-17, volet dépôt multi-format AFK)
 bloque-par: []
 ---
@@ -62,7 +62,20 @@ grand-public 0014) :
   format cible 24 kHz mono du décodage n'est pas prouvé compatible Chatterbox —
   l'aperçu audible relève du clonage réel, ticket 0012).
 
-## Critère de clôture
+## Clôture (session 2026-07-17) — capture micro validée au réel
+
+- **Capture micro navigateur validée au réel le 2026-07-17** (« ok ca marche ») :
+  depuis un navigateur Windows sur `http://127.0.0.1:8100/admin` (chemin
+  mirrored/localhost, contexte sécurisé via l'exemption localhost — sans quoi
+  `getUserMedia` serait refusé), la carte « Enregistrer ma voix » capture au
+  micro, ré-encode en WAV PCM16 mono (writer JS pur, après re-décodage du flux
+  `MediaRecorder` par `decodeAudioData`), et l'envoi enrôle la voix, visible
+  dans la liste. Le maillon jamais éprouvé (WebM/Opus → `decodeAudioData` → WAV)
+  passe pour de vrai. **Aucune anomalie à capturer dans `docs/impasses.md`.**
+- Les deux voies du critère de clôture sont donc éprouvées au réel : dépôt
+  multi-format (mp3 décodé ffmpeg, 2026-07-17) **et** capture micro navigateur.
+
+## Critère de clôture (atteint)
 
 Depuis un navigateur Windows sur `/admin` : j'enrôle une voix soit en capturant
 au micro, soit en déposant un mp3 ; elle apparaît dans la liste ; anomalies de
