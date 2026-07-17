@@ -14,6 +14,14 @@ ARG TTS_EXTRA=chatterbox
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --extra "${TTS_EXTRA}"
 
+# ffmpeg APRÈS le uv sync lourd : couche indépendante et légère, pour ne jamais
+# invalider le cache chatterbox (~2,5 Go, ~20 min). Décode les échantillons de
+# voix mp3/m4a/ogg/flac → WAV (DecodeurFfmpeg, VOICE_FORGE_DECODEUR=ffmpeg) ;
+# binaire CPU, aucun enjeu sm_120.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY app ./app
 
 ENV VOICE_FORGE_HOST=0.0.0.0

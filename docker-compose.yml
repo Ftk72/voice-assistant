@@ -73,6 +73,7 @@ services:
     environment:
       VOICE_FORGE_HOST: 0.0.0.0          # à l'intérieur du réseau Docker uniquement
       VOICE_FORGE_PROVIDER: chatterbox
+      VOICE_FORGE_DECODEUR: ffmpeg       # dépôt multi-format (mp3, m4a…) → WAV ; ffmpeg dans l'image
       VOICE_FORGE_VOICES_DIR: /data/voices
       VOICE_FORGE_CACHE_DIR: /data/cache
       VOICE_FORGE_CHATTERBOX_DIR: /models/chatterbox

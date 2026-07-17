@@ -5,6 +5,7 @@ from fastapi import APIRouter, Form, HTTPException, Request, Response, UploadFil
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from app.decodeurs.base import FormatAudioNonSupporte
 from app.schemas import Voice
 from app.voices.manager import VOICE_NAME_PATTERN
 
@@ -26,7 +27,11 @@ async def import_voice(
 ) -> Voice:
     speaker_bytes = await speaker.read()
     if speaker_bytes[0:4] != b"RIFF" or speaker_bytes[8:12] != b"WAVE":
-        raise HTTPException(status_code=415, detail="Le fichier n'est pas un WAV.")
+        # Non-WAV : on tente un décodage (mp3, m4a, ogg, flac…) vers WAV de référence.
+        try:
+            speaker_bytes = request.app.state.decodeur.en_wav(speaker_bytes)
+        except FormatAudioNonSupporte as erreur:
+            raise HTTPException(status_code=415, detail="Format audio non supporté.") from erreur
     try:
         return request.app.state.voice_manager.create_voice(name, speaker_bytes)
     except FileExistsError:

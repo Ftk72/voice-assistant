@@ -1,5 +1,7 @@
 from conftest import add_voice
 
+from app.decodeurs.base import FormatAudioNonSupporte
+
 
 def import_voice(client, name: str):
     return client.post(
@@ -9,7 +11,29 @@ def import_voice(client, name: str):
     )
 
 
-def test_importer_une_voix_la_rend_visible_dans_openwebui(client):
+def import_fichier(client, name: str, contenu: bytes, nom_fichier: str):
+    return client.post(
+        "/admin/api/voices",
+        data={"name": name},
+        files={"speaker": (nom_fichier, contenu, "application/octet-stream")},
+    )
+
+
+class DecodeurEspion:
+    """Décodeur de test : enregistre ses appels, renvoie un WAV canné ou lève."""
+
+    def __init__(self, sortie: bytes | None = b"RIFFdecodeWAVE") -> None:
+        self.appels: list[bytes] = []
+        self._sortie = sortie
+
+    def en_wav(self, donnees: bytes) -> bytes:
+        self.appels.append(donnees)
+        if self._sortie is None:
+            raise FormatAudioNonSupporte("espion")
+        return self._sortie
+
+
+def test_importer_une_voix_la_rend_visible(client):
     response = import_voice(client, "Emma")
 
     assert response.status_code == 201
@@ -30,6 +54,33 @@ def test_importer_un_fichier_qui_n_est_pas_un_wav_renvoie_415(client):
     )
 
     assert response.status_code == 415
+
+
+def test_un_wav_est_stocke_tel_quel_sans_passer_par_le_decodeur(client, voices_dir):
+    espion = DecodeurEspion()
+    client.app.state.decodeur = espion
+
+    assert import_voice(client, "Emma").status_code == 201
+    assert espion.appels == []  # le WAV court-circuite le décodeur
+    assert (voices_dir / "Emma" / "speaker.wav").read_bytes() == b"RIFFxxxxWAVE"
+
+
+def test_un_mp3_est_decode_en_wav_puis_stocke(client, voices_dir):
+    espion = DecodeurEspion(sortie=b"RIFFdecodeWAVE")
+    client.app.state.decodeur = espion
+
+    response = import_fichier(client, "Emma", b"ID3 octets mp3", "voix.mp3")
+
+    assert response.status_code == 201
+    assert espion.appels == [b"ID3 octets mp3"]  # le décodeur a reçu les octets bruts
+    assert (voices_dir / "Emma" / "speaker.wav").read_bytes() == b"RIFFdecodeWAVE"
+    assert client.get("/audio/voices").json()["voices"] == [{"id": "Emma", "name": "Emma"}]
+
+
+def test_un_format_indecodable_renvoie_415(client):
+    client.app.state.decodeur = DecodeurEspion(sortie=None)  # lève FormatAudioNonSupporte
+
+    assert import_fichier(client, "Emma", b"octets illisibles", "voix.xyz").status_code == 415
 
 
 def test_les_noms_dangereux_sont_rejetes(client):

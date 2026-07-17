@@ -52,11 +52,12 @@
   <p class="sub">Administration des voix — l'usage quotidien (sélection, appel) se fait ailleurs, ces voix sont simplement visibles pour l'assistant.</p>
 
   <section class="card">
-    <h2 style="font-size:1rem;margin:0 0 .75rem">Importer une voix</h2>
+    <h2 style="font-size:1rem;margin:0 0 .25rem">Importer une voix</h2>
+    <p class="sub" style="margin:0 0 .75rem">Un échantillon audio — wav, mp3, m4a, ogg ou flac (converti en WAV de référence).</p>
     <form id="import-form">
       <input type="text" name="name" placeholder="Nom de la voix (ex. Emma)" required
              pattern="[\w À-ÿ'-]{1,50}">
-      <input type="file" name="speaker" accept="audio/wav,.wav" required>
+      <input type="file" name="speaker" accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac" required>
       <button type="submit">Importer</button>
     </form>
     <div id="status"></div>
@@ -94,7 +95,7 @@ async function refresh() {
   const container = document.getElementById("voices");
   container.innerHTML = "";
   if (!voices.length) {
-    container.innerHTML = '<div class="empty">Aucune voix. Importez un speaker.wav ci-dessus ou déposez un dossier dans voices/.</div>';
+    container.innerHTML = '<div class="empty">Aucune voix. Importez un échantillon (wav, mp3, m4a, ogg, flac) ci-dessus ou déposez un dossier dans voices/.</div>';
     return;
   }
   for (const voice of voices) {

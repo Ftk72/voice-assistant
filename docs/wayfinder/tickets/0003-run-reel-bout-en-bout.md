@@ -1,7 +1,7 @@
 ---
 label: wayfinder:task
-statut: ouvert
-assigne:
+statut: clos
+assigne: utilisateur (HITL, poste Windows, sessions 2026-07-10 → 2026-07-16)
 bloque-par: []
 ---
 
@@ -67,3 +67,23 @@ Logs du premier essai fournis par l'utilisateur (`logs-tests/transport.log`,
   après redémarrage du transport.
 - L'agent recherche mot d'éveil a été arrêté par l'utilisateur (aucune note
   produite) — le ticket 0009 redevient non réclamé.
+
+## Résolution (2026-07-16) — chaîne voix validée bout-en-bout
+
+Le run réel a été mené à terme au poste Windows (« ça marche et ça répond »,
+puis « c'est validé »). La nouvelle stack **parle** : conversation ouverte au
+bouton, micro → VAD → STT français → Dialogue Forge → TTS voice-forge → retour
+audio dans la coquille.
+
+Ce que le run a révélé (pièges levés en cours de route, chacun corrigé) :
+CORS coquille (405 sur `/offer`), VAD Pipecat 1.5 (`vad_analyzer=` ignoré →
+`VADProcessor`), WAV float32 grésillant (`NormaliseurWavPCM16`), timeout httpx
+au premier tour, montages vides post-reboot. `getUserMedia`/WebView2 confirmé,
+événements RTVI confirmés (ticket 0007). Détails dans les handoffs 0016/0017 et
+`docs/impasses.md`.
+
+Mesures partielles observées : STT TTFB 0,3-0,5 s, temps de traitement STT
+0,13-0,32 s, transcriptions françaises exactes. **Latence voix→voix en régime
+non encore mesurée** : premier tour à froid lent (préfill LLM ~13 s, connu) —
+la mesure propre face aux références de l'ancienne stack (2,88 s) reste à faire
+au ticket 0011 (arbitrage latence, cible ≤ 2 s).

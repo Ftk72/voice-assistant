@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8100
     provider: Literal["fake", "chatterbox", "qwen3tts"] = "fake"
+    decodeur: Literal["fake", "ffmpeg"] = "fake"
     cache_dir: Path | None = None
     chatterbox_dir: Path | None = None
     qwen3tts_dir: Path | None = None

@@ -84,6 +84,20 @@ wayfinder « plan, don't do ») jusqu'à la stack qui parle.
 
 ## Pas encore spécifié
 
+- **Enrôlement de la vraie voix — re-cartographié le 2026-07-17** (grilling
+  utilisateur) : l'ancien 0005 étroit est éclaté en un atelier d'enrôlement
+  (capture micro + **dépôt multi-format**, 0005 réécrit), le **clonage réel
+  Chatterbox sur RTX 5080** (0012, pilier « faire marcher pour de vrai »), le
+  cadrage de la **liste complète des voix cross-forge** (0013, ex-« reste
+  ouvert » du 0008), un **réglage grand-public voix+persona dans la coquille**
+  (0014, surface neuve distincte de la console A4) et la **bascule des
+  consommateurs** (0015). Restent en brume, contingents à ces tickets :
+  - **Qualité du clone à l'oreille** — une fois 0012 audible, décider si le
+    zero-shot une-prise suffit ou s'il faut plusieurs échantillons / régler
+    `exaggeration`/`cfg_weight` par voix (`config.json`) ; sharp seulement après
+    avoir entendu.
+  - **Formats acceptés & limite de taille** du dépôt multi-format — dépend de la
+    décision de décodage tranchée en 0005.
 - **Ce que le run réel révélera** : sample_rate réel de voice-forge vs
   pipeline, comportement getUserMedia/WebView2, événements RTVI réels — des
   correctifs naîtront du ticket « Run réel bout-en-bout sur Windows », de
