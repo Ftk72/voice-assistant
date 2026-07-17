@@ -1,7 +1,7 @@
 ---
 label: wayfinder:task
-statut: ouvert
-assigne:
+statut: clos
+assigne: agent principal (session 2026-07-17) + utilisateur (HITL, poste Windows)
 bloque-par: [0003-run-reel-bout-en-bout, 0009-recherche-mot-d-eveil-francais]
 ---
 
@@ -91,3 +91,44 @@ bouton reste le chemin nominal (plan B du ticket, déjà acté).
   se dépose dans `eveil/modeles/`, `MOT_DEVEIL`/`FICHIER_MODELE` changent dans
   `eveil.js`. Le canari valide tout le reste d'ici là.
 - **Ne pas clore** avant la validation HITL du critère (« dis… » ouvre en réel).
+
+## Résolution (2026-07-17) — validé au poste Windows
+
+Critère de clôture atteint : **« hey Jarvis » (canari) ouvre une conversation
+réelle depuis la veille**, pastille passant veille → écoute. Validé au poste
+Windows par l'utilisateur.
+
+**Ce que le run réel a prouvé** (l'inconnu qui portait tout le risque du ticket
+est levé) :
+
+- WASM openWakeWord **compile et tourne sous WebView2** avec la CSP élargie
+  (`wasm-unsafe-eval`, `blob:`) — journal : `moteur chargé (WASM, mono-thread)`.
+- Détection en veille effective : `détecté « hey_jarvis » (score 0.96)`.
+- La détection appelle le **même point d'entrée que le bouton** ; la veille
+  suspend son micro le temps de la conversation et le reprend au raccrochage.
+- **Robustesse prouvée par accident** : au premier essai, transport injoignable
+  (`POST /offer` échoue) — le chemin `abandonner()` a rendu le micro et **rouvert
+  la veille tout seul**. Le module ne se bloque jamais sur une panne d'infra ;
+  le bouton reste le chemin nominal (plan B tenu).
+
+**Deux pièges levés en cours d'intégration** (au registre `docs/impasses.md`,
+2026-07-17) : la CSP `script-src 'self'` refuse WASM + AudioWorklet Blob en
+silence ; onnxruntime-web redouble un `wasmPaths` relatif et exige sa glue
+`.mjs` vendorée à côté du `.wasm`. Et un défaut latent corrigé au passage :
+`raccrocher()` ne coupait pas les pistes `getUserMedia` (micro chaud après
+raccrochage — bloquant pour la reprise de veille).
+
+**Reste ouvert, hors périmètre de ce ticket** :
+
+- **Mot d'éveil français** : `hey_jarvis` n'est qu'un canari anglais. Le mot FR
+  doit être entraîné sur mesure (session Colab openWakeWord, Piper
+  `fr_FR-upmc-medium`) puis déposé dans `eveil/modeles/` — seules deux constantes
+  de `eveil.js` changent alors. Aucun modèle FR n'existe (recherche 0009).
+- **Réglage in situ** : faux positifs (télé, musique, distance), et tenue de la
+  détection **console masquée** (Chromium peut geler une page cachée) — à
+  éprouver à l'usage ; le seuil (`SEUIL` dans `eveil.js`) s'ajuste sans rebuild.
+- **Mot d'arrêt parlé** (« bye Jarvis ») : demandé en séance, non implémenté. Le
+  moteur est suspendu pendant la conversation (ADR 0012), donc un mot d'arrêt
+  renverserait ce principe ; voie recommandée si ticketé = laisser le Dialogue
+  Forge comprendre « au revoir » dans le flux STT déjà transcrit, plutôt qu'un
+  2e modèle audio à entraîner. À arbitrer par l'utilisateur.

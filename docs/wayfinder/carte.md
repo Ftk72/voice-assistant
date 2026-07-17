@@ -70,6 +70,13 @@ wayfinder « plan, don't do ») jusqu'à la stack qui parle.
   bidirectionnel (page et transport tenaient deux conversations DF distinctes —
   les menus ne commandaient rien). Reste : liste complète des voix enrôlées
   (accès cross-forge à voice-forge, à cadrer).
+- [Mot d'éveil dans la webview](tickets/0010-mot-d-eveil-dans-la-webview.md) —
+  « hey Jarvis » (canari anglais openWakeWord WASM, vendoré zéro-CDN) **ouvre une
+  conversation depuis la veille** ; **validé au réel le 2026-07-17** (WASM sous
+  WebView2, détection 0.96, reprise de veille si transport injoignable). Détection
+  dans `console.js` (événement d'entrée, pas la pastille — enquête sourcée). Reste
+  hors périmètre : entraîner le **mot français** (canari anglais en attendant),
+  régler les faux positifs, et un éventuel mot d'arrêt parlé (à arbitrer).
 - [Docs racine v2](tickets/0002-docs-racine-v2.md) — documentation racine
   réalignée ADR 0009 (README, ACCEPTANCE v2 = spec de 0011, plan de tests,
   CLAUDE.md) ; OpenWebUI purgé des docs vivantes ; mesures anciennes gardées en
