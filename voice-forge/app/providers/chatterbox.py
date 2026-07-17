@@ -78,7 +78,10 @@ class _RealChatterboxEngine:
     """Adaptateur du vrai modèle. Imports paresseux : chatterbox/torch ne sont
     requis qu'à l'exécution avec VOICE_FORGE_PROVIDER=chatterbox.
 
-    Jamais exécuté à ce jour.
+    Exécuté au réel : synthèse française clonée validée à l'oreille dans la
+    nouvelle stack (aperçu /admin, poste Windows, 2026-07-17) — ~1,75 s en
+    régime, WAV PCM16 mono 24 kHz, sm_120 (capability 12.0) confirmé sur
+    RTX 5080 via torch 2.8/cu128 (ticket wayfinder 0012).
 
     Deux modes, selon `local_dir` :
     - `local_dir` fourni : pipeline anglais `ChatterboxTTS` chargé via
