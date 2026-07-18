@@ -22,3 +22,6 @@ voices/*
 
 # Config personnelle du Pont hôte (host-bridge/catalog.example.toml reste versionné)
 host-bridge/catalog.toml
+
+# Logs des runs de test manuels (transport, coquille)
+logs-tests/
