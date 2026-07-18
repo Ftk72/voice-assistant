@@ -99,6 +99,12 @@ code {
   background: var(--fond-carte);
 }
 
+/* Le graphe mémoire respire : plus haut que les autres modules (scène 3D). */
+.graphe {
+  height: 70vh;
+  min-height: 24rem;
+}
+
 #journal {
   margin-top: 1.25rem;
   white-space: pre-wrap;
