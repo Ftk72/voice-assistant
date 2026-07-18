@@ -11,6 +11,7 @@ from scripts.corpus_synthetique import (
     PONTS,
     TROU_STRUCTUREL,
     generer_corpus,
+    preparer_lignes,
 )
 
 
@@ -125,3 +126,29 @@ def test_le_graphe_hors_isoles_est_connexe():
                 vus.add(voisin)
                 pile.append(voisin)
     assert vus == set(corpus.communaute_de), "toutes les communautés doivent se rejoindre"
+
+
+def test_les_lignes_portent_les_champs_obligatoires_de_graphiti():
+    """Impasse 2026-07-18 : l'index fulltext de Neo4j voit les arêtes
+    synthétiques, et Graphiti valide chaque enregistrement en pydantic —
+    sans group_id/created_at/name, toute recherche `/search` rend un 500."""
+    episodes, noeuds, aretes = preparer_lignes(generer_corpus())
+    for episode in episodes:
+        assert episode["group_id"] == ""
+        assert episode["cree"] is not None
+        assert episode["valide"] is not None
+        assert episode["source"] in {"message", "text"}
+        assert episode["contenu"]
+    for noeud in noeuds:
+        assert noeud["group_id"] == ""
+        assert noeud["cree"] is not None
+    for arete in aretes:
+        assert arete["group_id"] == ""
+        assert arete["cree"] is not None
+        assert arete["nom"] == "RELIE"
+        assert len(arete["episodes"]) == 1
+
+
+def test_preparer_lignes_est_deterministe():
+    corpus = generer_corpus()
+    assert preparer_lignes(corpus) == preparer_lignes(corpus)

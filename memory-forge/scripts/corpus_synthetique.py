@@ -12,9 +12,14 @@ ce module et se lance en CLI :
 
 Le Cypher direct est un choix acté au ticket : l'ingestion normale
 (POST /episodes → extraction LLM) est non déterministe et ne peut garantir la
-topologie. Contrepartie assumée : les arêtes synthétiques n'ont ni embeddings
-ni index fulltext — `/search` les ignore, seule la viz les voit. Chaque nœud
-porte `corpus: "synthetique"` : la purge ne touche jamais la mémoire réelle.
+topologie. Attention (impasse 2026-07-18) : l'index fulltext de Neo4j indexe
+automatiquement toute nouvelle arête `RELATES_TO` — `/search` les voit donc
+bel et bien, et Graphiti valide chaque enregistrement en pydantic : les champs
+`group_id`/`created_at`/`name` (et leurs équivalents sur Entity/Episodic) sont
+**obligatoires**, sous peine de 500 sur toute recherche. Les embeddings, eux,
+restent absents (assumé : le corpus sort du fulltext, pas du vectoriel).
+Chaque nœud porte `corpus: "synthetique"` : la purge ne touche jamais la
+mémoire réelle.
 """
 
 import argparse
@@ -283,30 +288,55 @@ def _uuid(rng: random.Random) -> str:
     return str(uuid.UUID(int=rng.getrandbits(128)))
 
 
-def peupler(corpus: Corpus, uri: str, utilisateur: str, mot_de_passe: str) -> dict[str, int]:
-    """Purge l'ancien corpus synthétique puis écrit le nouveau. Idempotent."""
-    from neo4j import GraphDatabase
+# Champs exigés par les modèles pydantic de Graphiti (EntityNode, EntityEdge,
+# EpisodicNode) : sans eux, toute recherche fulltext qui croise le corpus rend
+# un 500 (impasse 2026-07-18). Valeurs alignées sur la mémoire réelle
+# (group_id vide = graphe unique) et déterministes (corpus rejouable).
+_GROUP_ID = ""
+_CREATED_AT = datetime(2026, 1, 1, tzinfo=UTC)
+_SOURCE_EPISODE = {"conversation": "message", "document": "text"}
 
+
+def preparer_lignes(corpus: Corpus) -> tuple[list[dict], list[dict], list[dict]]:
+    """Prépare (épisodes, nœuds, arêtes) prêts pour l'UNWIND Cypher — fonction
+    pure et déterministe, testée : chaque ligne porte les champs que Graphiti
+    valide en pydantic au moment d'une recherche."""
     rng = random.Random(0)
     episodes = {
         (a.provenance_source, a.provenance_nom) for a in corpus.aretes
     }
     lignes_episodes = [
-        {"uuid": _uuid(rng), "source": source, "nom": nom,
-         "description": f"{source}:{nom}"}
+        {"uuid": _uuid(rng), "source": _SOURCE_EPISODE[source], "nom": nom,
+         "description": f"{source}:{nom}", "contenu": f"Corpus synthétique — {source} {nom}.",
+         "group_id": _GROUP_ID, "cree": _CREATED_AT, "valide": _CREATED_AT}
         for source, nom in sorted(episodes)
     ]
-    uuid_episode = {(e["source"], e["nom"]): e["uuid"] for e in lignes_episodes}
-    lignes_noeuds = [{"nom": nom, "uuid": _uuid(rng)} for nom in corpus.noeuds]
+    uuid_episode = {
+        (e["description"].split(":")[0], e["nom"]): e["uuid"] for e in lignes_episodes
+    }
+    lignes_noeuds = [
+        {"nom": nom, "uuid": _uuid(rng), "group_id": _GROUP_ID, "cree": _CREATED_AT,
+         "resume": ""}
+        for nom in corpus.noeuds
+    ]
     lignes_aretes = [
         {
             "source": a.source, "target": a.target, "uuid": _uuid(rng),
             "fait": a.fait, "valide": a.valide_depuis,
             "invalide": a.obsolete_depuis,
             "episodes": [uuid_episode[(a.provenance_source, a.provenance_nom)]],
+            "group_id": _GROUP_ID, "cree": _CREATED_AT, "nom": "RELIE",
         }
         for a in corpus.aretes
     ]
+    return lignes_episodes, lignes_noeuds, lignes_aretes
+
+
+def peupler(corpus: Corpus, uri: str, utilisateur: str, mot_de_passe: str) -> dict[str, int]:
+    """Purge l'ancien corpus synthétique puis écrit le nouveau. Idempotent."""
+    from neo4j import GraphDatabase
+
+    lignes_episodes, lignes_noeuds, lignes_aretes = preparer_lignes(corpus)
 
     with GraphDatabase.driver(uri, auth=(utilisateur, mot_de_passe)) as driver:
         purger(driver)
@@ -314,7 +344,12 @@ def peupler(corpus: Corpus, uri: str, utilisateur: str, mot_de_passe: str) -> di
             """
             UNWIND $lignes AS l
             CREATE (:Episodic {uuid: l.uuid, name: l.nom,
+                               source: l.source,
                                source_description: l.description,
+                               content: l.contenu,
+                               group_id: l.group_id,
+                               created_at: l.cree, valid_at: l.valide,
+                               entity_edges: [],
                                corpus: 'synthetique'})
             """,
             lignes=lignes_episodes,
@@ -322,7 +357,10 @@ def peupler(corpus: Corpus, uri: str, utilisateur: str, mot_de_passe: str) -> di
         driver.execute_query(
             """
             UNWIND $lignes AS l
-            CREATE (:Entity {uuid: l.uuid, name: l.nom, corpus: 'synthetique'})
+            CREATE (:Entity {uuid: l.uuid, name: l.nom,
+                             group_id: l.group_id, created_at: l.cree,
+                             summary: l.resume, labels: ['Entity'],
+                             corpus: 'synthetique'})
             """,
             lignes=lignes_noeuds,
         )
@@ -331,9 +369,10 @@ def peupler(corpus: Corpus, uri: str, utilisateur: str, mot_de_passe: str) -> di
             UNWIND $lignes AS l
             MATCH (a:Entity {name: l.source, corpus: 'synthetique'})
             MATCH (b:Entity {name: l.target, corpus: 'synthetique'})
-            CREATE (a)-[:RELATES_TO {uuid: l.uuid, fact: l.fait,
+            CREATE (a)-[:RELATES_TO {uuid: l.uuid, name: l.nom, fact: l.fait,
                                      valid_at: l.valide, invalid_at: l.invalide,
                                      episodes: l.episodes,
+                                     group_id: l.group_id, created_at: l.cree,
                                      corpus: 'synthetique'}]->(b)
             """,
             lignes=lignes_aretes,

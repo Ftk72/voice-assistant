@@ -83,6 +83,12 @@ reste dans memory-forge (`/viz`), la coquille ne fait qu'assembler.
   communautés). `detecter_trous()` en TDD (≤ 1 arête, communautés ≥ 3 entités,
   top 3 par produit des tailles), le prompt du 0020 finit par au plus une
   question ouverte sur un angle mort. Jugement œil/oreille encore dû.
+- [Le graphe dans la coquille](tickets/0022-le-graphe-dans-la-coquille.md) —
+  **livré le 2026-07-18** (délégué haiku) : onglet « Graphe » dans la console
+  Tauri, iframe vers `/viz` (pattern A4) en chargement paresseux (`data-src`
+  promu à la première visite — la scène WebGL ne se paie pas au démarrage),
+  CSP `frame-src` étendue à 8200. Le verrou était la CSP Tauri, pas CORS.
+  Validation au réel au poste Windows encore due.
 
 ## Pas encore spécifié
 
