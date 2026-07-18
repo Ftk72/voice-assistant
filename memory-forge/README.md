@@ -14,7 +14,7 @@ Configuration par variables d'environnement (préfixe `MEMORY_FORGE_`) : `BACKEN
 ## API (phase 1)
 
 - `POST /episodes` `{content, source: conversation|document, name}` → **202** immédiat, extraction en file différée (jamais pendant une conversation vocale).
-- `GET /search?q=…` → `{facts: [{text, provenance, valid_at, invalid_at}]}` — consommé par la Filter OpenWebUI (injection).
+- `GET /search?q=…` → `{facts: [{text, provenance, valid_at, invalid_at}]}` — consommé par le Dialogue Forge (injection avant chaque tour).
 - `DELETE /facts?entity=…` → oubli réel (suppression, pas invalidation).
 - `GET /graph?entity=…&depth=1..3` → voisinage navigable `{center, nodes, edges}` — consommé par la page `/viz`.
 - `GET /graph/complet?limite=500&provenance=conversation|document` → le graphe entier, enrichi `{noeuds: [{nom, communaute, centralite}], aretes, tronque}` — consommé par la vue 3D de `/viz` (roadmap B1). `provenance` est optionnel (filtre les arêtes, et les nœuds qu'il isole disparaissent avec elles) ; sans limite dépassée, `tronque` vaut `false`. Les faits obsolètes (`invalid_at` non nul) sont toujours inclus, marqués — jamais omis silencieusement.

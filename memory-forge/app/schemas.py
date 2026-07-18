@@ -68,3 +68,43 @@ class GrapheComplet(BaseModel):
     noeuds: list[NoeudGraphe]
     aretes: list[GraphEdge]
     tronque: bool = False
+    noms_communautes: dict[int, str] = {}
+
+
+class SujetCondense(BaseModel):
+    """Un sujet (communauté nommée) du condensé du graphe (ticket wayfinder 0020)."""
+
+    nom: str
+    taille: int
+
+
+class TrouCondense(BaseModel):
+    """Paire de communautés quasi pas reliées (ticket wayfinder 0021) — un angle
+    mort de la mémoire, matière à question pour l'assistant."""
+
+    communaute_a: int
+    communaute_b: int
+    sujet_a: str
+    sujet_b: str
+    nb_aretes: int
+
+
+class CondenseGraphe(BaseModel):
+    """Résumé statistique du graphe complet, préparé pour être raconté par le LLM
+    local (ticket wayfinder 0020) — jamais de chiffre à inventer côté prompt,
+    tout part d'ici."""
+
+    nb_entites: int
+    nb_faits: int
+    nb_faits_obsoletes: int
+    sujets: list[SujetCondense] = []
+    ponts: list[str] = []
+    trous: list[TrouCondense] = []
+
+
+class InsightReponse(BaseModel):
+    """Réponse de `GET /insight` : le paragraphe généré et le condensé qui l'a
+    nourri, pour la transparence côté /viz."""
+
+    insight: str
+    condense: CondenseGraphe

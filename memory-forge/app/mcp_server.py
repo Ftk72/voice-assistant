@@ -2,9 +2,11 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
 from app.graph.base import GraphMemory
+from app.insight import raconter
+from app.insight.base import GenerateurInsight
 
 
-def build_mcp(graph: GraphMemory) -> FastMCP:
+def build_mcp(graph: GraphMemory, insight: GenerateurInsight) -> FastMCP:
     """Outils MCP consommés par le client natif d'OpenWebUI (recall/forget, ADR 0005)."""
     mcp = FastMCP(
         "memory-forge",
@@ -49,5 +51,18 @@ def build_mcp(graph: GraphMemory) -> FastMCP:
         if count == 0:
             return f"Rien à oublier : aucun fait lié à « {entity} »."
         return f"C'est oublié : {count} fait(s) concernant « {entity} » supprimé(s) définitivement."
+
+    @mcp.tool(
+        description=(
+            "Raconte ce que la mémoire persistante de l'assistant sait dans l'ensemble : ses "
+            "sujets dominants et les entités qui font le pont entre plusieurs d'entre eux. À "
+            "utiliser quand l'utilisateur demande « que sait ta mémoire ? », « raconte-moi ta "
+            "mémoire », ou toute question portant sur la mémoire dans son ensemble plutôt que "
+            "sur un sujet précis (pour un sujet précis, utilise plutôt recall). Restitue ce "
+            "paragraphe oralement, tel quel ou reformulé, ne le lis pas comme une liste."
+        )
+    )
+    async def raconter_memoire() -> str:
+        return (await raconter(graph, insight)).insight
 
     return mcp

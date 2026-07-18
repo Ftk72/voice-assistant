@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8200
     backend: Literal["fake", "graphiti"] = "fake"
+    # Récit du graphe mémoire (ticket wayfinder 0020) : le réel réutilise llm_base_url.
+    insight_backend: Literal["fake", "openai"] = "fake"
     # Ingestion documentaire (phase 4) — désactivée si aucun dossier n'est fourni.
     documents_dir: Path | None = None
     documents_poll_seconds: float = 10.0  # polling mtime, fiable sur bind-mounts WSL

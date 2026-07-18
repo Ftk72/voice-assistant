@@ -23,7 +23,10 @@
   legend { display: none; }
   label { color: var(--muted); display: flex; gap: .3rem; align-items: center; cursor: pointer; white-space: nowrap; }
   main { display: flex; height: calc(100vh - 53px); }
-  #scene { flex: 1; min-width: 0; position: relative; background: var(--bg); }
+  #scene { flex: 1; min-width: 0; position: relative; background:
+           radial-gradient(ellipse at center, #14171c 0%, var(--bg) 72%); }
+  #scene::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+           box-shadow: inset 0 0 18vw 4vw var(--bg); }
   aside { width: 340px; border-left: 1px solid var(--line); background: var(--panel);
           padding: 1rem; overflow-y: auto; flex-shrink: 0; }
   aside h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em;
@@ -40,6 +43,23 @@
   #entite-selection .nom { font-weight: 600; }
   #entite-selection button { align-self: flex-start; }
   .vide { color: var(--muted); font-style: italic; }
+  #btn-insight { width: 100%; }
+  #insight { margin-top: .5rem; line-height: 1.5; }
+  #insight p.erreur { color: #e5534b; }
+  .communaute { display: flex; justify-content: space-between; gap: .5rem; width: 100%;
+                text-align: left; border: 1px solid var(--line); border-radius: 8px;
+                padding: .4rem .65rem; margin-bottom: .4rem; background: var(--bg); color: var(--text); }
+  .communaute:hover { border-color: var(--muted); }
+  .communaute .taille { color: var(--muted); white-space: nowrap; }
+  /* Puces des trous structurels (ticket wayfinder 0021) */
+  .trou { display: block; width: 100%; text-align: left; border: 1px dashed var(--line);
+          border-radius: 8px; padding: .35rem .6rem; margin-top: .5rem; background: var(--bg);
+          color: var(--muted); font-size: .82rem; }
+  .trou:hover { border-color: var(--accent); color: var(--text); }
+  .trou:disabled { opacity: .5; cursor: not-allowed; }
+  .trou:disabled:hover { border-color: var(--line); color: var(--muted); }
+  /* Mode « ponts » (ticket 0019) : curseur de seuil et compteur dans l'en-tête. */
+  #seuil-ponts { width: 80px; }
 </style>
 </head>
 <body>
@@ -61,6 +81,11 @@
     <label><input type="checkbox" id="f-obsoletes" checked> obsolètes</label>
     <label><input type="checkbox" id="obsoletes-masques"> les masquer (plutôt que les estomper)</label>
   </fieldset>
+  <fieldset title="Ponts entre communautés : mode squelette (entités reliant plusieurs communautés)">
+    <label><input type="checkbox" id="mode-ponts"> ponts</label>
+    <label>seuil <input type="range" id="seuil-ponts" min="2" max="10" step="1" value="2">
+      <span id="ponts-compte">≥ 2</span></label>
+  </fieldset>
   <fieldset title="Dimension de la scène">
     <label><input type="checkbox" id="mode-2d"> vue 2D</label>
   </fieldset>
@@ -69,24 +94,118 @@
 <main>
   <div id="scene"></div>
   <aside>
+    <h2>Insight</h2>
+    <button type="button" id="btn-insight">Raconter la mémoire</button>
+    <div id="insight"><p class="vide">Aucun récit généré pour l'instant.</p></div>
+    <h2>Communautés</h2>
+    <div id="communautes"><p class="vide">Aucune communauté détectée.</p></div>
     <h2>Entité sélectionnée</h2>
     <div id="entite-selection"><p class="vide">Cliquer un nœud pour l'explorer.</p></div>
     <h2 id="titre-faits">Faits</h2>
     <div id="faits"><p class="vide">Aucune entité sélectionnée.</p></div>
   </aside>
 </main>
+<!-- ForceGraph3D reste un script classique (bundle UMD, expose window.ForceGraph3D) ;
+     three.js et ses addons sont vendorés en modules ES (ticket wayfinder « Somptuosité
+     3D et balade fluide ») — l'import map ci-dessous doit précéder tout script module
+     qui résout le spécificateur nu « three » (contrainte du navigateur). -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "/viz/vendor/three/three.module.min.js"
+  }
+}
+</script>
 <script src="/viz/vendor/3d-force-graph.min.js"></script>
-<script>
-"use strict";
+<script type="module">
+import * as THREE from "three";
+import SpriteText from "/viz/vendor/three-spritetext.mjs";
+import { UnrealBloomPass } from "/viz/vendor/three/postprocessing/UnrealBloomPass.js";
+import { OutlinePass } from "/viz/vendor/three/postprocessing/OutlinePass.js";
 
-// Palette de communautés : couleurs stables par index (communauté = couleur, ADR 0010 pt.6).
-const PALETTE = [
-  "#6ea8fe", "#74c69d", "#f0a63a", "#e5534b", "#b98ee0",
-  "#4cc9c0", "#f2c14e", "#f27db0", "#8ecae6", "#a3be8c",
+// Palette de communautés : Okabe & Ito 2008 — les 8 teintes catégorielles les
+// plus citées en dataviz accessible, choisies pour rester distinguables en
+// deutéranopie, protanopie et tritanopie (un angle doré en HSL pur ne garantit
+// rien de tel : deux teintes voisines sur le cercle peuvent se confondre en
+// daltonisme rouge-vert). Au-delà de 8 communautés (le corpus en compte 14),
+// on rejoue les mêmes teintes en les éclaircissant par cran plutôt que d'en
+// introduire de nouvelles — une neuvième teinte inédite recréerait le risque
+// qu'on vient d'éliminer.
+const PALETTE_ACCESSIBLE = [
+  "#E69F00", "#56B4E9", "#009E73", "#F0E442",
+  "#0072B2", "#D55E00", "#CC79A7", "#999999",
 ];
-const couleurCommunaute = (c) => PALETTE[c % PALETTE.length];
+function eclaircirVersBlanc(hex, cran) {
+  if (cran <= 0) return hex;
+  const quantite = Math.min(cran * 0.22, 0.75);
+  const canal = (i) => parseInt(hex.slice(i, i + 2), 16);
+  const eclaircir = (v) => Math.round(v + (255 - v) * quantite);
+  return `rgb(${eclaircir(canal(1))}, ${eclaircir(canal(3))}, ${eclaircir(canal(5))})`;
+}
+function couleurCommunaute(c) {
+  const base = PALETTE_ACCESSIBLE[c % PALETTE_ACCESSIBLE.length];
+  return eclaircirVersBlanc(base, Math.floor(c / PALETTE_ACCESSIBLE.length));
+}
+// Hors palette catégorielle (aucune des 8 teintes Okabe-Ito n'est un magenta) :
+// l'accent ne doit jamais se confondre avec une communauté, daltonisme ou non.
+const COULEUR_ACCENT = "#ff3ea5";
+// Mode « ponts » (ticket 0019, variante C du prototype retenue au réel) : en
+// mode squelette, seuls les ponts (losanges blancs) et les arêtes
+// inter-communautés (ambrées) restent saillants, tout le reste se ternit.
+const COULEUR_LIEN_INTER = "#f0a63a";
+const COULEUR_LIEN_TERNI = "#1a1d24";
 
-const state = { noeuds: new Map(), aretes: [], centre: null, selection: null };
+const state = {
+  noeuds: new Map(), aretes: [], centre: null, selection: null,
+  nomsCommunautes: new Map(), // communauté (int) → nom (ticket 0018)
+  ponts: new Set(),   // noms des entités-ponts au seuil courant (ticket 0019)
+  survol: null,       // nom du nœud survolé (focus transitoire)
+  verrouille: null,   // nom du nœud sur lequel le focus est épinglé (dernier clic)
+  // Vue d'entrée allégée (grilling du 2026-07-18) : au premier chargement,
+  // 264 entités d'un coup est de la soupe visuelle (la littérature UX situe
+  // le confort à 20-50 nœuds). Ne restreint QUE le rendu du graphe complet —
+  // le bouton « Graphe complet » et toute exploration ciblée l'ignorent, ce
+  // sont les deux échappatoires vers la vue exhaustive.
+  vueAllegee: false,
+  // Vrai après une exploration ciblée (explorer()) : les communautés client
+  // sont alors écrasées (fusionner remet tout à 0, ticket 0019) et ne
+  // correspondent plus aux ids du condensé — garde-fou pour les puces de
+  // trous structurels (ticket 0021), voir volerVersTrou().
+  explorationCiblee: false,
+};
+
+// Le focus : le nœud sous la souris prime sur celui épinglé au dernier clic ;
+// sans les deux, rien ne s'estompe (vue d'ensemble intacte).
+function noeudEnFocus() { return state.survol ?? state.verrouille; }
+
+function ensembleEnFocus() {
+  const centre = noeudEnFocus();
+  if (!centre) return null;
+  const noeuds = new Set([centre]);
+  const liens = new Set();
+  aretesVisibles().forEach((a) => {
+    if (a.source === centre || a.target === centre) {
+      noeuds.add(a.source); noeuds.add(a.target);
+      liens.add(cle(a));
+    }
+  });
+  return { noeuds, liens };
+}
+
+// Force le moteur à réévaluer les accesseurs de matière pour tous les nœuds/
+// arêtes déjà en scène (recette officielle 3d-force-graph : réappliquer un
+// accesseur avec lui-même déclenche le rafraîchissement, même si la fonction
+// n'a pas changé — seul l'état qu'elle lit, `noeudEnFocus()`, a bougé). Le
+// halo de sélection (OutlinePass) et les étiquettes se rafraîchissent à part :
+// les rappeler ici les détruirait et recréerait à chaque survol.
+function rafraichirSurlignage() {
+  graphe
+    .nodeColor(graphe.nodeColor())
+    .linkColor(graphe.linkColor())
+    .linkWidth(graphe.linkWidth())
+    .linkDirectionalParticles(graphe.linkDirectionalParticles());
+  rafraichirHalo();
+}
 
 function cle(a) { return [a.source, a.target, a.text].join("|"); }
 
@@ -117,8 +236,61 @@ function fusionner(noeuds, aretes) {
   for (const a of aretes) if (!connues.has(cle(a))) state.aretes.push(a);
 }
 
-async function chargerGrapheComplet() {
-  setStatus("Chargement du graphe complet…");
+// --- Ponts entre communautés (ticket 0019) ---
+// Qualification : est un pont toute entité dont le voisinage couvre au moins
+// N communautés (la sienne comprise), N au curseur de l'en-tête (2-10).
+// L'intermédiarité (Brandes) essayée au prototype n'a pas survécu au verdict :
+// elle ne servait qu'à classer une liste (variante B, non retenue).
+function calculerPonts() {
+  state.ponts.clear();
+  const seuil = Number(document.getElementById("seuil-ponts").value);
+  if (state.nomsCommunautes.size) {
+    const etrangeres = new Map(); // nom → Set(communautés étrangères voisines)
+    for (const a of state.aretes) {
+      const s = state.noeuds.get(a.source), t = state.noeuds.get(a.target);
+      if (!s || !t || s.nom === t.nom || s.communaute === t.communaute) continue;
+      for (const [de, vers] of [[s, t], [t, s]]) {
+        if (!etrangeres.has(de.nom)) etrangeres.set(de.nom, new Set());
+        etrangeres.get(de.nom).add(vers.communaute);
+      }
+    }
+    for (const [nom, communautes] of etrangeres) {
+      if (communautes.size + 1 >= seuil) state.ponts.add(nom);
+    }
+  }
+  document.getElementById("ponts-compte").textContent = `≥ ${seuil} · ${state.ponts.size} pont(s)`;
+}
+
+// Le mode ne s'applique que si des ponts sont connus : une exploration ciblée
+// écrase les communautés (fusionner remet 0) — le squelette s'y suspend
+// plutôt que d'afficher des ponts faux.
+function modePontsActif() {
+  return document.getElementById("mode-ponts").checked && state.ponts.size > 0;
+}
+
+function valeurNoeud(n) {
+  const base = 2 + 8 * (n.centralite ?? 0);
+  if (!modePontsActif()) return base;
+  return state.ponts.has(n.nom) ? base * 1.8 + 3 : 1;
+}
+
+function couleurTernie(communaute) {
+  const couleur = new THREE.Color(couleurCommunaute(communaute));
+  couleur.lerp(new THREE.Color(COULEUR_ESTOMPEE_NOEUD), 0.7);
+  return `#${couleur.getHexString()}`;
+}
+
+// Après le démarrage de la simulation, link.source/target deviennent les
+// objets nœuds eux-mêmes (cf. le commentaire de rafraichir()).
+const nomExtremite = (x) => (typeof x === "object" ? x.nom : x);
+function areteInterCommunautes(l) {
+  const s = state.noeuds.get(nomExtremite(l.source));
+  const t = state.noeuds.get(nomExtremite(l.target));
+  return !!s && !!t && s.communaute !== t.communaute;
+}
+
+async function chargerGrapheComplet({ allege = false } = {}) {
+  setStatus(allege ? "Chargement de la vue allégée…" : "Chargement du graphe complet…");
   const params = new URLSearchParams({ limite: "500" });
   const provs = [];
   if (document.getElementById("f-conversation").checked) provs.push("conversation");
@@ -132,9 +304,56 @@ async function chargerGrapheComplet() {
   state.noeuds.clear();
   state.aretes = [];
   state.centre = null;
+  state.vueAllegee = allege;
+  state.explorationCiblee = false;
   fusionner(data.noeuds, data.aretes);
-  setStatus(`Graphe complet : ${state.noeuds.size} entités, ${state.aretes.length} faits${data.tronque ? " (tronqué aux plus connectées)" : ""}.`);
+  // Les clés JSON d'un `dict[int, str]` arrivent en chaînes : reconverties en entiers
+  // pour matcher `noeud.communaute` (un int côté état JS).
+  state.nomsCommunautes = new Map(
+    Object.entries(data.noms_communautes ?? {}).map(([cle, nom]) => [Number(cle), nom])
+  );
+  const total = `${state.noeuds.size} entités, ${state.aretes.length} faits${data.tronque ? " (tronqué aux plus connectées)" : ""}`;
+  setStatus(allege
+    ? `Vue allégée (entités dominantes + voisinage) sur ${total} — bouton « Graphe complet » pour tout voir.`
+    : `Graphe complet : ${total}.`);
+  calculerPonts();
   rafraichir();
+  rafraichirLegende();
+}
+
+// Légende des communautés (ticket 0018) : reflète tout `state.noeuds` chargé,
+// pas seulement les nœuds visibles/filtrés — la légende est une carte du
+// graphe entier, indépendante des filtres de provenance/obsolescence.
+function rafraichirLegende() {
+  const zone = document.getElementById("communautes");
+  const tailles = new Map(); // communauté → nombre de nœuds
+  for (const n of state.noeuds.values()) {
+    tailles.set(n.communaute, (tailles.get(n.communaute) ?? 0) + 1);
+  }
+  const lignes = [...tailles.entries()]
+    .filter(([c]) => state.nomsCommunautes.has(c))
+    .sort((a, b) => b[1] - a[1]);
+  if (!lignes.length) { zone.innerHTML = '<p class="vide">Aucune communauté détectée.</p>'; return; }
+  zone.replaceChildren();
+  for (const [communaute, taille] of lignes) {
+    const nom = state.nomsCommunautes.get(communaute);
+    const bouton = document.createElement("button");
+    bouton.type = "button";
+    bouton.className = "communaute";
+    bouton.innerHTML = '<span class="nom"></span><span class="taille"></span>';
+    bouton.querySelector(".nom").textContent = nom;
+    bouton.querySelector(".taille").textContent = `(${taille})`;
+    bouton.addEventListener("click", () => {
+      const premiereEntite = nom.split(" · ")[0];
+      const noeudDuGraphe = graphe.graphData().nodes.find((n) => n.nom === premiereEntite);
+      if (!noeudDuGraphe) return;
+      volerVers(noeudDuGraphe);
+      state.verrouille = premiereEntite;
+      rafraichirSurlignage();
+      rafraichirEtiquettes();
+    });
+    zone.append(bouton);
+  }
 }
 
 async function explorer(entite, { fusion = false } = {}) {
@@ -145,7 +364,10 @@ async function explorer(entite, { fusion = false } = {}) {
   const data = await res.json();
   if (!fusion) { state.noeuds.clear(); state.aretes = []; }
   state.centre = data.center;
+  state.vueAllegee = false; // exploration ciblée : on montre exactement ce qui a été demandé
+  state.explorationCiblee = true;
   fusionner(data.nodes.map((nom) => ({ nom, communaute: 0, centralite: 0 })), data.edges);
+  state.ponts.clear(); // communautés écrasées par la fusion : le mode ponts se suspend
   setStatus(`${state.noeuds.size} entités, ${state.aretes.length} faits.`);
   rafraichir();
   selectionner(data.center);
@@ -157,19 +379,36 @@ function aretesVisibles() {
 
 function rafraichir() {
   const masquerObsoletes = document.getElementById("obsoletes-masques").checked;
-  const aretes = aretesVisibles().filter((a) => !(masquerObsoletes && a.invalid_at !== null));
+  let aretes = aretesVisibles().filter((a) => !(masquerObsoletes && a.invalid_at !== null));
   const relies = new Set(aretes.flatMap((a) => [a.source, a.target]));
-  const noeuds = [...state.noeuds.values()].filter(
+  let noeuds = [...state.noeuds.values()].filter(
     (n) => relies.has(n.nom) || n.nom === state.centre || state.noeuds.size <= 1
   );
+  if (state.vueAllegee) {
+    const dominants = new Set(
+      noeuds.filter((n) => (n.centralite ?? 0) >= CENTRALITE_DOMINANTE).map((n) => n.nom)
+    );
+    const retenus = new Set(dominants);
+    for (const a of aretes) {
+      if (dominants.has(a.source)) retenus.add(a.target);
+      if (dominants.has(a.target)) retenus.add(a.source);
+    }
+    noeuds = noeuds.filter((n) => retenus.has(n.nom) || n.nom === state.centre);
+    aretes = aretes.filter((a) => retenus.has(a.source) && retenus.has(a.target));
+  }
   const donnees = {
     nodes: noeuds,
+    // `id` = clé stable (cle() sur l'arête d'origine) : après le démarrage de
+    // la simulation, 3d-force-graph remplace link.source/target par les
+    // objets nœuds eux-mêmes — un lien ne peut plus se reconnaître par ces
+    // champs mutés, d'où cet identifiant figé à la construction.
     links: aretes.map((a) => ({
-      source: a.source, target: a.target, texte: a.text,
+      id: cle(a), source: a.source, target: a.target, texte: a.text,
       provenance: a.provenance, obsolete: a.invalid_at !== null,
     })),
   };
   graphe.graphData(donnees);
+  nettoyerEtiquettes();
 }
 
 function selectionner(nom) {
@@ -221,22 +460,264 @@ function afficherFaits(entite) {
   }
 }
 
+// --- Focus visuel : couleur/largeur des nœuds et arêtes selon l'ensemble en focus ---
+const COULEUR_ESTOMPEE_NOEUD = "#33373f";
+const COULEUR_ESTOMPEE_LIEN = "#20232a";
+
+function couleurDeBase(l) {
+  return l.obsolete ? "#6c757d" : (l.provenance.source === "document" ? "#74c69d" : "#6ea8fe");
+}
+
+function volerVers(noeud) {
+  const distance = 160;
+  const rayon = Math.hypot(noeud.x || 0, noeud.y || 0, noeud.z || 0) || 1;
+  const ratio = 1 + distance / rayon;
+  graphe.cameraPosition(
+    { x: (noeud.x ?? 0) * ratio, y: (noeud.y ?? 0) * ratio, z: (noeud.z ?? 0) * ratio },
+    noeud,
+    900
+  );
+}
+
+// --- Puces des trous structurels (ticket wayfinder 0021) ---
+function noeudsDeCommunaute(communaute) {
+  return [...state.noeuds.values()].filter((n) => n.communaute === communaute);
+}
+
+// Cadre la caméra sur le barycentre des deux communautés du trou, en reculant
+// d'une distance proportionnelle au rayon englobant des nœuds concernés —
+// même mécanique que volerVers(), généralisée à un ensemble de nœuds plutôt
+// qu'à un seul. Recharge d'abord le graphe complet si les communautés client
+// (écrasées par une exploration ciblée) ne correspondent plus au condensé —
+// jamais de cadrage faux.
+async function volerVersTrou(trou) {
+  const manque = !noeudsDeCommunaute(trou.communaute_a).length
+    || !noeudsDeCommunaute(trou.communaute_b).length;
+  if (state.explorationCiblee || manque) {
+    await chargerGrapheComplet();
+  }
+  const concernes = [
+    ...noeudsDeCommunaute(trou.communaute_a),
+    ...noeudsDeCommunaute(trou.communaute_b),
+  ];
+  if (!concernes.length) { setStatus("Angle mort introuvable dans le graphe actuel."); return; }
+  const cx = concernes.reduce((s, n) => s + (n.x || 0), 0) / concernes.length;
+  const cy = concernes.reduce((s, n) => s + (n.y || 0), 0) / concernes.length;
+  const cz = concernes.reduce((s, n) => s + (n.z || 0), 0) / concernes.length;
+  const rayon = Math.max(
+    ...concernes.map((n) => Math.hypot((n.x || 0) - cx, (n.y || 0) - cy, (n.z || 0) - cz)),
+    1
+  );
+  const distance = 100 + rayon * 2;
+  const rayonOrigine = Math.hypot(cx, cy, cz) || 1;
+  const ratio = 1 + distance / rayonOrigine;
+  graphe.cameraPosition({ x: cx * ratio, y: cy * ratio, z: cz * ratio }, { x: cx, y: cy, z: cz }, 900);
+}
+
+// Une puce par trou, affichée sous le paragraphe d'insight ; rien si le
+// condensé n'en fournit aucun (pas de section vide).
+function afficherTrous(trous) {
+  const zone = document.getElementById("insight");
+  for (const trou of trous) {
+    const bouton = document.createElement("button");
+    bouton.type = "button";
+    bouton.className = "trou";
+    bouton.textContent = `${trou.sujet_a} ↔ ${trou.sujet_b} (${trou.nb_aretes} fait) — voir`;
+    bouton.addEventListener("click", () => volerVersTrou(trou));
+    zone.append(bouton);
+  }
+}
+
+// --- Étiquettes : vraies sprites 3D (three-spritetext), pas un bricolage DOM ---
+// Un SpriteText par nœud, mémoïsé et jamais recréé : on mute ses propriétés
+// (texte déjà fixe, couleur, taille, visibilité) plutôt que de le reconstruire —
+// reconstruire régénère un canvas + une texture GPU, coûteux à chaque frame.
+const spriteParNoeud = new Map(); // nom → SpriteText
+const SEUIL_PROCHE = 260;
+const CENTRALITE_DOMINANTE = 0.4;
+const MAX_ETIQUETTES = 60;
+
+function objetDuNoeud(n) {
+  const existant = spriteParNoeud.get(n.nom);
+  if (existant) return existant;
+  const etiquette = new SpriteText(n.nom);
+  etiquette.textHeight = 2.6;
+  etiquette.color = "#e8e9eb";
+  etiquette.backgroundColor = "rgba(14,16,19,0.75)";
+  etiquette.padding = 1.4;
+  etiquette.borderRadius = 3;
+  etiquette.fontFace = "system-ui";
+  etiquette.material.depthWrite = false; // lisible même partiellement recouverte
+  etiquette.position.y = 8; // flotte au-dessus de la sphère du nœud
+  etiquette.visible = false; // rafraichirEtiquettes() décide qui s'affiche
+  spriteParNoeud.set(n.nom, etiquette);
+  return etiquette;
+}
+
+function nettoyerEtiquettes() {
+  for (const [nom, sprite] of spriteParNoeud) {
+    if (state.noeuds.has(nom)) continue;
+    sprite.material.map?.dispose();
+    sprite.material.dispose();
+    spriteParNoeud.delete(nom);
+  }
+}
+
+function rafraichirEtiquettes() {
+  const focus = ensembleEnFocus();
+  const cam = graphe.camera();
+  const centreFocus = noeudEnFocus();
+  const candidats = [];
+  for (const noeud of graphe.graphData().nodes) {
+    if (noeud.x === undefined) continue; // simulation pas encore démarrée
+    const estCentre = noeud.nom === state.centre;
+    const estFocalise = focus ? focus.noeuds.has(noeud.nom) : false;
+    if (focus && !estFocalise) continue; // le focus masque le reste, net
+    const distance = Math.hypot(noeud.x - cam.position.x, noeud.y - cam.position.y, noeud.z - cam.position.z);
+    const dominante = (noeud.centralite ?? 0) >= CENTRALITE_DOMINANTE;
+    if (!(estCentre || estFocalise || dominante || distance < SEUIL_PROCHE)) continue;
+    const priorite = (estCentre ? 4 : 0) + (noeud.nom === centreFocus ? 3 : 0)
+      + (estFocalise ? 2 : 0) + (dominante ? 1 : 0) - distance / 1000;
+    candidats.push({ noeud, priorite, estCentre, focale: noeud.nom === centreFocus });
+  }
+  candidats.sort((a, b) => b.priorite - a.priorite);
+  const retenus = candidats.slice(0, MAX_ETIQUETTES);
+  const retenusParNom = new Map(retenus.map((c) => [c.noeud.nom, c]));
+
+  for (const [nom, sprite] of spriteParNoeud) sprite.visible = retenusParNom.has(nom);
+  for (const { noeud, estCentre, focale } of retenus) {
+    const sprite = objetDuNoeud(noeud);
+    sprite.visible = true;
+    sprite.textHeight = estCentre || focale ? 3.6 : 2.6;
+    sprite.color = estCentre ? COULEUR_ACCENT : (focale ? "#ffffff" : "#e8e9eb");
+  }
+}
+
+// --- Halo de sélection (OutlinePass) : glow franc sur le nœud en focus ---
+function rafraichirHalo() {
+  const centre = noeudEnFocus();
+  const noeud = centre ? graphe.graphData().nodes.find((n) => n.nom === centre) : null;
+  passeContour.selectedObjects = noeud?.__threeObj ? [noeud.__threeObj] : [];
+}
+
 // --- Scène 3d-force-graph (vendorée, zéro CDN) ---
 const graphe = ForceGraph3D()(document.getElementById("scene"))
   .backgroundColor("#0e1013")
   .nodeLabel((n) => n.nom)
-  .nodeColor((n) => n.nom === state.centre ? "#f0a63a" : couleurCommunaute(n.communaute ?? 0))
-  .nodeVal((n) => 2 + 8 * (n.centralite ?? 0))
-  .linkColor((l) => l.obsolete ? "#6c757d" : (l.provenance.source === "document" ? "#74c69d" : "#6ea8fe"))
+  .nodeColor((n) => {
+    if (modePontsActif()) {
+      return state.ponts.has(n.nom) ? "#ffffff" : couleurTernie(n.communaute ?? 0);
+    }
+    if (n.nom === state.centre) return COULEUR_ACCENT;
+    const focus = ensembleEnFocus();
+    if (!focus) return couleurCommunaute(n.communaute ?? 0);
+    if (n.nom === noeudEnFocus()) return "#ffffff";
+    return focus.noeuds.has(n.nom) ? couleurCommunaute(n.communaute ?? 0) : COULEUR_ESTOMPEE_NOEUD;
+  })
+  .nodeVal(valeurNoeud)
+  .nodeThreeObject((n) => {
+    const etiquette = objetDuNoeud(n);
+    if (!(modePontsActif() && state.ponts.has(n.nom))) return etiquette;
+    // Losange blanc du pont, par-dessus la sphère par défaut (extend=true) —
+    // rayon aligné sur celui de la sphère (nodeRelSize 4 × ∛val).
+    const groupe = new THREE.Group();
+    groupe.add(etiquette);
+    groupe.add(new THREE.Mesh(
+      new THREE.OctahedronGeometry(4 * Math.cbrt(valeurNoeud(n)) + 1.5),
+      new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.3 })
+    ));
+    return groupe;
+  })
+  .nodeThreeObjectExtend(true)
+  .linkColor((l) => {
+    if (modePontsActif()) {
+      return areteInterCommunautes(l) ? COULEUR_LIEN_INTER : COULEUR_LIEN_TERNI;
+    }
+    const focus = ensembleEnFocus();
+    if (!focus) return couleurDeBase(l);
+    return focus.liens.has(l.id) ? couleurDeBase(l) : COULEUR_ESTOMPEE_LIEN;
+  })
   .linkOpacity(0.55)
-  .linkWidth((l) => l.obsolete ? 0.5 : 1)
+  .linkWidth((l) => {
+    if (modePontsActif()) return areteInterCommunautes(l) ? 2.2 : 0.25;
+    const base = l.obsolete ? 0.5 : 1;
+    const focus = ensembleEnFocus();
+    if (!focus) return base;
+    return focus.liens.has(l.id) ? base * 1.8 : base * 0.4;
+  })
+  .linkCurvature(0.18)
+  .linkDirectionalParticles((l) => {
+    if (modePontsActif()) return areteInterCommunautes(l) ? 2 : 0;
+    if (l.obsolete) return 0;
+    const focus = ensembleEnFocus();
+    return (!focus || focus.liens.has(l.id)) ? 1 : 0;
+  })
+  .linkDirectionalParticleWidth(1.4)
+  .linkDirectionalParticleSpeed(0.004)
   .linkLabel((l) => l.texte)
-  .onNodeClick((n) => { explorer(n.nom, { fusion: true }); })
-  .onNodeHover((n) => { document.getElementById("scene").style.cursor = n ? "pointer" : null; });
+  .onNodeClick((n) => {
+    volerVers(n);
+    state.verrouille = n.nom;
+    rafraichirSurlignage();
+    rafraichirEtiquettes();
+    explorer(n.nom, { fusion: true });
+  })
+  .onNodeHover((n) => {
+    document.getElementById("scene").style.cursor = n ? "pointer" : null;
+    const nom = n ? n.nom : null;
+    if (nom === state.survol) return;
+    state.survol = nom;
+    rafraichirSurlignage();
+    rafraichirEtiquettes();
+  })
+  .onBackgroundClick(() => {
+    if (!state.verrouille) return;
+    state.verrouille = null;
+    rafraichirSurlignage();
+    rafraichirEtiquettes();
+  });
+
+// Post-traitement : le halo de sélection (OutlinePass) et un bloom léger sur
+// tout le highlight — `postProcessingComposer()` expose le composer que
+// 3d-force-graph utilise déjà en interne pour son rendu ; on y greffe nos
+// passes plutôt que de dupliquer un pipeline de rendu.
+const tailleScene = () => {
+  const el = document.getElementById("scene");
+  return new THREE.Vector2(el.clientWidth, el.clientHeight);
+};
+const passeContour = new OutlinePass(tailleScene(), graphe.scene(), graphe.camera());
+passeContour.edgeStrength = 5;
+passeContour.edgeGlow = 1.4;
+passeContour.edgeThickness = 1.8;
+passeContour.pulsePeriod = 0;
+passeContour.visibleEdgeColor.set(COULEUR_ACCENT);
+passeContour.hiddenEdgeColor.set("#000000");
+const passeBloom = new UnrealBloomPass(tailleScene(), 0.5, 0.4, 0.2);
+const composer = graphe.postProcessingComposer();
+composer.addPass(passeContour);
+composer.addPass(passeBloom);
+
+// Boucle indépendante de la simulation physique : `onEngineTick` ne tire que
+// pendant que les forces bougent les nœuds, pas pendant qu'on tourne la
+// caméra à la souris (TrackballControls) — sans quoi le zoom sémantique
+// (rapprocher la caméra fait apparaître des étiquettes) resterait figé une
+// fois la simulation stabilisée.
+let dernierRecalculEtiquettes = 0;
+function boucleAnimation(horodatage) {
+  if (horodatage - dernierRecalculEtiquettes > 200) {
+    rafraichirEtiquettes();
+    dernierRecalculEtiquettes = horodatage;
+  }
+  requestAnimationFrame(boucleAnimation);
+}
+requestAnimationFrame(boucleAnimation);
 
 function redimensionner() {
   const el = document.getElementById("scene");
   graphe.width(el.clientWidth).height(el.clientHeight);
+  const taille = tailleScene();
+  passeContour.setSize(taille.x, taille.y);
+  passeBloom.setSize(taille.x, taille.y);
 }
 window.addEventListener("resize", redimensionner);
 redimensionner();
@@ -246,7 +727,7 @@ document.getElementById("form-recherche").addEventListener("submit", (e) => {
   const entite = document.getElementById("entite").value.trim();
   if (entite) explorer(entite);
 });
-document.getElementById("btn-graphe-complet").addEventListener("click", chargerGrapheComplet);
+document.getElementById("btn-graphe-complet").addEventListener("click", () => chargerGrapheComplet());
 for (const id of ["f-conversation", "f-document", "f-obsoletes", "obsoletes-masques"]) {
   document.getElementById(id).addEventListener("change", () => {
     rafraichir();
@@ -256,8 +737,44 @@ for (const id of ["f-conversation", "f-document", "f-obsoletes", "obsoletes-masq
 document.getElementById("mode-2d").addEventListener("change", (e) => {
   graphe.numDimensions(e.target.checked ? 2 : 3);
 });
+// Mode ponts : réappliquer nodeThreeObject reconstruit les losanges (même
+// recette que rafraichirSurlignage : re-poser un accesseur avec lui-même).
+function rafraichirModePonts() {
+  graphe.nodeThreeObject(graphe.nodeThreeObject());
+  graphe.nodeVal(graphe.nodeVal());
+  rafraichirSurlignage();
+}
+document.getElementById("mode-ponts").addEventListener("change", rafraichirModePonts);
+document.getElementById("seuil-ponts").addEventListener("input", () => {
+  calculerPonts();
+  rafraichirModePonts();
+});
 
-chargerGrapheComplet();
+
+// --- Panneau Insight (ticket wayfinder 0020) : récit du graphe par le LLM local ---
+document.getElementById("btn-insight").addEventListener("click", async () => {
+  const bouton = document.getElementById("btn-insight");
+  const zone = document.getElementById("insight");
+  bouton.disabled = true;
+  zone.innerHTML = '<p class="vide">Génération en cours — le premier appel peut dépasser la minute (chargement du modèle), ~10 s ensuite…</p>';
+  try {
+    const res = await fetch("/insight");
+    if (!res.ok) throw new Error(`Erreur ${res.status}`);
+    const data = await res.json();
+    zone.replaceChildren();
+    const p = document.createElement("p");
+    p.textContent = data.insight;
+    zone.append(p);
+    afficherTrous(data.condense?.trous ?? []);
+  } catch (e) {
+    zone.innerHTML = '<p class="vide erreur"></p>';
+    zone.querySelector("p").textContent = `Échec de la génération : ${e.message}`;
+  } finally {
+    bouton.disabled = false;
+  }
+});
+
+chargerGrapheComplet({ allege: true });
 </script>
 </body>
 </html>

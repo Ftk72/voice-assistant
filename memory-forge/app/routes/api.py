@@ -4,8 +4,9 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
-from app.schemas import EpisodeIn, GrapheComplet, GraphNeighborhood, SearchResponse
-from app.viz.analyse import enrichir
+from app.insight import raconter
+from app.schemas import EpisodeIn, GrapheComplet, GraphNeighborhood, InsightReponse, SearchResponse
+from app.viz.analyse import enrichir, nommer_communautes
 
 VIZ_PAGE = Path(__file__).resolve().parent.parent / "viz" / "index.html"
 VENDOR_DIR = Path(__file__).resolve().parent.parent / "viz" / "vendor"
@@ -19,12 +20,14 @@ def viz_page() -> FileResponse:
     return FileResponse(VIZ_PAGE)
 
 
-@router.get("/viz/vendor/{nom_fichier}", include_in_schema=False)
-def viz_vendor(nom_fichier: str) -> FileResponse:
-    """Sert les bibliothèques JS vendorées (3d-force-graph) — zéro CDN, souveraineté
-    (ADR 0010 point 6). `nom_fichier` n'est jamais interpolé dans un chemin hors de
-    `VENDOR_DIR` : FastAPI ne route ici que le segment final de l'URL."""
-    chemin = (VENDOR_DIR / nom_fichier).resolve()
+@router.get("/viz/vendor/{chemin_relatif:path}", include_in_schema=False)
+def viz_vendor(chemin_relatif: str) -> FileResponse:
+    """Sert les bibliothèques JS vendorées (3d-force-graph, three.js + addons,
+    three-spritetext) — zéro CDN, souveraineté (ADR 0010 point 6). `:path` accepte
+    les sous-dossiers (les modules three.js s'importent entre eux par chemin
+    relatif) ; `chemin_relatif` n'est jamais interpolé hors de `VENDOR_DIR` — le
+    `.resolve()` normalise les `..` avant la vérification d'appartenance."""
+    chemin = (VENDOR_DIR / chemin_relatif).resolve()
     if VENDOR_DIR not in chemin.parents or not chemin.is_file():
         raise HTTPException(status_code=404)
     return FileResponse(chemin, media_type="application/javascript")
@@ -74,7 +77,19 @@ async def graphe_complet(
         relies = {a.source for a in aretes} | {a.target for a in aretes}
         noms = [n for n in noms if n in relies]
     noeuds = enrichir(noms, aretes)
-    return GrapheComplet(noeuds=noeuds, aretes=aretes, tronque=graphe.tronque)
+    noms_communautes = nommer_communautes(noeuds)
+    return GrapheComplet(
+        noeuds=noeuds, aretes=aretes, tronque=graphe.tronque, noms_communautes=noms_communautes
+    )
+
+
+@router.get("/insight", response_model=InsightReponse)
+async def insight(request: Request) -> InsightReponse:
+    """Récit du graphe mémoire par le LLM local (ticket wayfinder 0020) : un
+    paragraphe en français, plus le condensé qui l'a nourri (transparence côté
+    /viz). Graphe complet sans filtre de provenance, même tranche que le
+    condensé de l'outil MCP `raconter_memoire`."""
+    return await raconter(request.app.state.graph, request.app.state.insight)
 
 
 @router.delete("/facts")

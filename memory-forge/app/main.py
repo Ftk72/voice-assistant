@@ -8,6 +8,8 @@ from app.config import Settings
 from app.graph.base import GraphMemory
 from app.graph.fake import InMemoryGraph
 from app.ingest.watcher import DocumentWatcher
+from app.insight.base import GenerateurInsight
+from app.insight.fake import GenerateurInsightFactice
 from app.mcp_server import build_mcp
 from app.routes.api import router
 from app.schemas import EpisodeIn
@@ -21,6 +23,14 @@ def build_graph(settings: Settings) -> GraphMemory:
 
         return GraphitiMemory(settings)
     return InMemoryGraph()
+
+
+def build_generateur_insight(settings: Settings) -> GenerateurInsight:
+    if settings.insight_backend == "openai":
+        from app.insight.openai_compat import GenerateurInsightOpenAI
+
+        return GenerateurInsightOpenAI(settings.llm_base_url)
+    return GenerateurInsightFactice()
 
 
 async def extraction_worker(queue: asyncio.Queue[EpisodeIn], graph: GraphMemory) -> None:
@@ -53,7 +63,8 @@ async def watch_documents(
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     graph = build_graph(settings)
-    mcp = build_mcp(graph)
+    insight = build_generateur_insight(settings)
+    mcp = build_mcp(graph, insight)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -74,6 +85,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Memory Forge", lifespan=lifespan)
     app.state.settings = settings
     app.state.graph = graph
+    app.state.insight = insight
     app.state.queue = asyncio.Queue()
     app.include_router(router)
     app.mount("/mcp", mcp.streamable_http_app())

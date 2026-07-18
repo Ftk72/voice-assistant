@@ -3,9 +3,13 @@ détection de communautés par propagation d'étiquettes et centralité par degr
 les nœuds de `GET /graph/complet` pour la vue 3D (communauté = couleur, centralité =
 taille — ADR 0010 point 6, roadmap B1)."""
 
-from app.schemas import GraphEdge, NoeudGraphe
+from app.schemas import CondenseGraphe, GraphEdge, NoeudGraphe, SujetCondense, TrouCondense
 
 _MAX_ITERATIONS = 20
+_MAX_PONTS = 5
+_MAX_ARETES_TROU = 1
+_TAILLE_MIN_COMMUNAUTE = 3
+_MAX_TROUS = 3
 
 
 def _adjacence(noeuds: list[str], aretes: list[tuple[str, str]]) -> dict[str, list[str]]:
@@ -72,6 +76,22 @@ def centralite_degre(noeuds: list[str], aretes: list[tuple[str, str]]) -> dict[s
     return {n: degre[n] / maximum for n in noeuds}
 
 
+def nommer_communautes(noeuds: list[NoeudGraphe]) -> dict[int, str]:
+    """Nom déterministe et gratuit (pas de LLM, ticket 0020 séparé) : les 3 entités
+    les plus centrales de chaque communauté, jointes par ` · ` — l'égalité de
+    centralité se départage par ordre alphabétique du nom, pour rester reproductible."""
+    par_communaute: dict[int, list[NoeudGraphe]] = {}
+    for noeud in noeuds:
+        par_communaute.setdefault(noeud.communaute, []).append(noeud)
+    return {
+        communaute: " · ".join(
+            n.nom
+            for n in sorted(membres, key=lambda n: (-n.centralite, n.nom))[:3]
+        )
+        for communaute, membres in par_communaute.items()
+    }
+
+
 def enrichir(noms: list[str], aretes: list[GraphEdge]) -> list[NoeudGraphe]:
     """Construit les `NoeudGraphe` (communauté + centralité) pour la liste de noms
     fournie, à partir des arêtes du graphe complet."""
@@ -82,3 +102,112 @@ def enrichir(noms: list[str], aretes: list[GraphEdge]) -> list[NoeudGraphe]:
         NoeudGraphe(nom=nom, communaute=communautes[nom], centralite=centralites[nom])
         for nom in noms
     ]
+
+
+def _detecter_ponts(noeuds: list[NoeudGraphe], aretes: list[GraphEdge]) -> list[str]:
+    """Une entité est un pont si ses arêtes touchent au moins 2 communautés
+    distinctes (la sienne comprise, via la communauté de chaque voisin) — définition
+    héritée du ticket 0019. Renvoie les 5 premières, triées par nombre de
+    communautés touchées décroissant, puis centralité décroissante, puis nom
+    alphabétique — déterministe."""
+    par_nom = {n.nom: n for n in noeuds}
+    communautes_touchees: dict[str, set[int]] = {n.nom: {n.communaute} for n in noeuds}
+    for arete in aretes:
+        source, cible = par_nom.get(arete.source), par_nom.get(arete.target)
+        if source is None or cible is None or source.nom == cible.nom:
+            continue
+        communautes_touchees[source.nom].add(cible.communaute)
+        communautes_touchees[cible.nom].add(source.communaute)
+
+    ponts = [nom for nom, communautes in communautes_touchees.items() if len(communautes) >= 2]
+    ponts.sort(
+        key=lambda nom: (
+            -len(communautes_touchees[nom]),
+            -par_nom[nom].centralite,
+            nom,
+        )
+    )
+    return ponts[:_MAX_PONTS]
+
+
+def detecter_trous(
+    noeuds: list[NoeudGraphe], aretes: list[GraphEdge], noms_communautes: dict[int, str]
+) -> list[TrouCondense]:
+    """Un « trou structurel » (ticket 0021) est une paire de communautés quasi
+    pas reliées — au plus `_MAX_ARETES_TROU` arête inter-communautés entre
+    elles — un angle mort de la mémoire, matière à question pour l'assistant.
+    Ignore les communautés de moins de `_TAILLE_MIN_COMMUNAUTE` entités ou
+    sans nom. Classées par produit des tailles décroissant, départagées
+    alphabétiquement par `(sujet_a, sujet_b)` ; seules les `_MAX_TROUS`
+    premières sont gardées."""
+    tailles: dict[int, int] = {}
+    for noeud in noeuds:
+        tailles[noeud.communaute] = tailles.get(noeud.communaute, 0) + 1
+    communautes_valables = sorted(
+        c
+        for c, taille in tailles.items()
+        if taille >= _TAILLE_MIN_COMMUNAUTE and c in noms_communautes
+    )
+
+    par_nom = {n.nom: n for n in noeuds}
+    compte_aretes: dict[tuple[int, int], int] = {}
+    for arete in aretes:
+        source, cible = par_nom.get(arete.source), par_nom.get(arete.target)
+        if source is None or cible is None or source.nom == cible.nom:
+            continue
+        if source.communaute == cible.communaute:
+            continue
+        paire = (min(source.communaute, cible.communaute), max(source.communaute, cible.communaute))
+        compte_aretes[paire] = compte_aretes.get(paire, 0) + 1
+
+    trous = []
+    for i, a in enumerate(communautes_valables):
+        for b in communautes_valables[i + 1 :]:
+            nb = compte_aretes.get((a, b), 0)
+            if nb > _MAX_ARETES_TROU:
+                continue
+            nom_a, nom_b = noms_communautes[a], noms_communautes[b]
+            if nom_a <= nom_b:
+                sujet_a, sujet_b, communaute_a, communaute_b = nom_a, nom_b, a, b
+            else:
+                sujet_a, sujet_b, communaute_a, communaute_b = nom_b, nom_a, b, a
+            trous.append(
+                TrouCondense(
+                    communaute_a=communaute_a,
+                    communaute_b=communaute_b,
+                    sujet_a=sujet_a,
+                    sujet_b=sujet_b,
+                    nb_aretes=nb,
+                )
+            )
+
+    trous.sort(
+        key=lambda t: (-(tailles[t.communaute_a] * tailles[t.communaute_b]), t.sujet_a, t.sujet_b)
+    )
+    return trous[:_MAX_TROUS]
+
+
+def condenser(
+    noeuds: list[NoeudGraphe], aretes: list[GraphEdge], noms_communautes: dict[int, str]
+) -> CondenseGraphe:
+    """Condense le graphe complet en un résumé statistique (ticket 0020), support
+    du récit du LLM local : nombre d'entités/faits, sujets nommés triés par
+    taille, entités-ponts. Graphe vide → condensé à zéros et listes vides."""
+    tailles: dict[int, int] = {}
+    for noeud in noeuds:
+        tailles[noeud.communaute] = tailles.get(noeud.communaute, 0) + 1
+    sujets = [
+        SujetCondense(nom=noms_communautes[communaute], taille=taille)
+        for communaute, taille in tailles.items()
+        if communaute in noms_communautes
+    ]
+    sujets.sort(key=lambda s: (-s.taille, s.nom))
+
+    return CondenseGraphe(
+        nb_entites=len(noeuds),
+        nb_faits=len(aretes),
+        nb_faits_obsoletes=sum(1 for a in aretes if a.invalid_at is not None),
+        sujets=sujets,
+        ponts=_detecter_ponts(noeuds, aretes),
+        trous=detecter_trous(noeuds, aretes, noms_communautes),
+    )
