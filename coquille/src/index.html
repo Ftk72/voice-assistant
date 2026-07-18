@@ -16,6 +16,7 @@
       <nav id="nav-vues" aria-label="Surfaces">
         <button type="button" class="onglet actif" data-vue="console">Console</button>
         <button type="button" class="onglet" data-vue="reglages">Réglages</button>
+        <button type="button" class="onglet" data-vue="graphe">Graphe</button>
       </nav>
 
       <section id="vue-console">
@@ -58,6 +59,24 @@
           class="dialogue"
           src="http://127.0.0.1:8600/reglage"
           title="Réglages"
+        ></iframe>
+      </section>
+
+      <!-- Module d'interface du graphe mémoire (ticket wayfinder 0022) : page
+           servie par Memory Forge, montée en iframe. Chargement paresseux car
+           scène 3D WebGL lourde (pattern du module dialogue A4, ADR 0009 —
+           chaque forge sert son UI). Le data-src est promu à src à la première
+           visite de l'onglet par nav.js. -->
+      <section id="vue-graphe" hidden>
+        <p class="intro">
+          Explorez ce que l'assistant garde en mémoire : sujets, liens, angles
+          morts.
+        </p>
+        <iframe
+          id="graphe"
+          class="dialogue graphe"
+          data-src="http://127.0.0.1:8200/viz"
+          title="Graphe mémoire"
         ></iframe>
       </section>
     </main>
