@@ -5,7 +5,7 @@ choses datées — un rappel est un événement dont l'annonce est la raison d'�
 cf. CONTEXT.md), **minuteurs** éphémères précis à la seconde, et **annonceur**
 (le seul canal de parole spontanée).
 
-## Outils MCP (consommés par OpenWebUI)
+## Outils MCP (consommés par le Dialogue Forge)
 
 - `create_event` — événement / rappel (`announce_lead_minutes=0`) / rendez-vous
   avec préavis (`announce_lead_minutes=60`).
@@ -26,9 +26,10 @@ MCP : `http://time:8400/mcp` depuis le réseau Docker.
   (`TIME_FORGE_ANNOUNCER=hostbridge`) : synthèse via le Voice Forge puis envoi
   du wav au Pont hôte qui le joue sur les enceintes (ADR 0008).
   **Jamais exécuté à ce jour** : à valider au premier lancement réel.
-- La notification visuelle dans OpenWebUI (glossaire : l'annonce est « doublée
-  d'une notification visuelle ») n'est pas encore branchée — à traiter au
-  réglage réel, via les mécanismes natifs d'OpenWebUI.
+- La notification visuelle dans la coquille (glossaire : l'annonce est « doublée
+  d'une notification visuelle » ; la pastille la porte, console fermée comprise —
+  ADR 0010) n'est pas encore branchée — canal SSE/WebSocket à concevoir côté
+  time-forge (roadmap B4).
 
 Le conteneur doit avoir `TZ` (ex. `Europe/Paris`) : les échéances sont en heure locale.
 

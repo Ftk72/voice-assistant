@@ -37,3 +37,11 @@ class Settings(BaseSettings):
     personas_dir: Path = PERSONAS_PAR_DEFAUT
     persona_defaut: str = "assistant"
     max_iterations_outils: int = 5
+
+    # Catalogue de voix — voice-forge (liste complète des voix enrôlées, réglage
+    # grand public, ticket wayfinder 0014).
+    voix_backend: Literal["fake", "rest"] = "fake"
+    voice_forge_url: str = "http://127.0.0.1:8100"
+
+    # Préférence permanente (persona + voix par défaut) : persistée sur disque.
+    reglage_path: Path = Path("/data/reglage.json")

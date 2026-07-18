@@ -1,7 +1,8 @@
 import json
+import logging
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 
 from app.schemas import (
@@ -12,6 +13,8 @@ from app.schemas import (
     PersonaRef,
     TourIn,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -27,10 +30,38 @@ def lister_personas(request: Request) -> list[PersonaRef]:
     return [PersonaRef(nom=p.nom, voix=p.voix) for p in personas.values()]
 
 
+@router.get("/voix")
+async def lister_voix(request: Request) -> dict[str, list[dict]]:
+    """Toutes les voix enrôlées (réglage grand public, ticket 0014). En cas de
+    panne du catalogue (voice-forge injoignable), replie sur les voix des
+    personas : le menu n'est jamais vide."""
+    catalogue = request.app.state.catalogue_voix
+    try:
+        return {"voix": await catalogue.lister()}
+    except Exception:
+        logger.warning(
+            "Catalogue de voix indisponible : repli sur les voix des personas", exc_info=True
+        )
+        personas = request.app.state.personas
+        vues = {p.voix for p in personas.values()}
+        return {"voix": [{"id": v, "nom": v} for v in sorted(vues)]}
+
+
+@router.post("/voix/{voix_id}/apercu")
+async def apercevoir_voix(voix_id: str, request: Request) -> Response:
+    catalogue = request.app.state.catalogue_voix
+    try:
+        contenu = await catalogue.apercu(voix_id)
+    except Exception as erreur:
+        raise HTTPException(status_code=502, detail="Aperçu de voix indisponible") from erreur
+    return Response(content=contenu, media_type="audio/wav")
+
+
 @router.post("/conversations", status_code=201)
 def creer_conversation(corps: CreerConversation, request: Request) -> dict[str, str]:
     personas = request.app.state.personas
-    cle = (corps.persona or request.app.state.settings.persona_defaut).lower()
+    prefs = request.app.state.preferences
+    cle = (corps.persona or prefs.persona).lower()
     if cle not in personas:
         raise HTTPException(status_code=404, detail=f"Persona inconnu : {corps.persona}")
     identifiant = uuid4().hex
@@ -38,8 +69,9 @@ def creer_conversation(corps: CreerConversation, request: Request) -> dict[str, 
         "persona": personas[cle].nom,
         "cle_persona": cle,
         "historique": [],
-        # Aucune dérogation au départ : les phrases portent la voix du persona.
-        "voix_derogee": None,
+        # Aucune dérogation au départ, sauf préférence enregistrée adoptée
+        # quand aucun persona explicite n'a été demandé (ticket 0014).
+        "voix_derogee": prefs.voix if corps.persona is None and prefs.voix else None,
     }
     return {"id": identifiant}
 

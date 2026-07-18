@@ -1,6 +1,10 @@
 # Personas voice-first
 
-Prompts systèmes à coller dans **Workspace → Models → + → System Prompt** (voir `docs/OPENWEBUI.md`). Règle commune : les réponses sont destinées à être **lues à voix haute** par le TTS — jamais de markdown, de listes, de code ou d'URL.
+Prompts systèmes chargés par le **Dialogue Forge** depuis ce dossier
+(`DIALOGUE_FORGE_PERSONAS_DIR`, monté sur `/personas`) : un persona associe un
+prompt à une voix par défaut (CONTEXT.md § Persona). Règle commune : les réponses
+sont destinées à être **lues à voix haute** par le TTS — jamais de markdown, de
+listes, de code ou d'URL.
 
 | Fichier | Persona | Voix (`meta.tts.voice`) |
 | --- | --- | --- |

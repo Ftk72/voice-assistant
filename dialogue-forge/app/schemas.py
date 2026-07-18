@@ -30,3 +30,9 @@ class ConversationVue(BaseModel):
     id: str
     persona: str
     historique: list[dict]
+
+
+class PreferenceIn(BaseModel):
+    # Préférence permanente (réglage grand public, ticket wayfinder 0014).
+    persona: str
+    voix: str | None = None

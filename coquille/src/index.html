@@ -8,33 +8,63 @@
   </head>
   <body>
     <main>
-      <h1>Console de l'assistant</h1>
-      <p class="intro">
-        Client voix de la coquille (ADR 0010, « bouton d'abord » ADR 0012).
-        Appuie, parle, écoute la réponse. La conversation passe par le
-        transport voix local (<code>127.0.0.1:8700</code>) ; aucune logique
-        métier ici — la coquille n'est que carte son et fenêtre.
-      </p>
+      <h1>Assistant vocal</h1>
 
-      <button id="bouton" type="button">Parler</button>
-      <div id="etat" role="status">En veille.</div>
+      <!-- Navigation entre surfaces (présentation pure, ADR 0009 — aucune
+           logique métier ici). La console est l'outil technique de suivi ; les
+           réglages sont la surface grand public (ticket 0014). -->
+      <nav id="nav-vues" aria-label="Surfaces">
+        <button type="button" class="onglet actif" data-vue="console">Console</button>
+        <button type="button" class="onglet" data-vue="reglages">Réglages</button>
+      </nav>
 
-      <!-- Piste audio de retour de l'assistant. -->
-      <audio id="audio" autoplay></audio>
+      <section id="vue-console">
+        <p class="intro">
+          Client voix de la coquille (ADR 0010, « bouton d'abord » ADR 0012).
+          Appuie, parle, écoute la réponse. La conversation passe par le
+          transport voix local (<code>127.0.0.1:8700</code>) ; aucune logique
+          métier ici — la coquille n'est que carte son et fenêtre.
+        </p>
 
-      <!-- Module d'interface du dialogue (A4) : page servie par le Dialogue
-           Forge (ADR 0009 — chaque forge sert son UI). La console ne fait que
-           l'héberger et lui relayer le fil RTVI (postMessage). -->
-      <iframe
-        id="dialogue"
-        class="dialogue"
-        src="http://127.0.0.1:8600/dialogue"
-        title="Module dialogue"
-      ></iframe>
+        <button id="bouton" type="button">Parler</button>
+        <div id="etat" role="status">En veille.</div>
 
-      <pre id="journal" aria-label="Journal technique"></pre>
+        <!-- Piste audio de retour de l'assistant. -->
+        <audio id="audio" autoplay></audio>
+
+        <!-- Module d'interface du dialogue (A4) : page servie par le Dialogue
+             Forge (ADR 0009 — chaque forge sert son UI). La console ne fait que
+             l'héberger et lui relayer le fil RTVI (postMessage). -->
+        <iframe
+          id="dialogue"
+          class="dialogue"
+          src="http://127.0.0.1:8600/dialogue"
+          title="Module dialogue"
+        ></iframe>
+
+        <pre id="journal" aria-label="Journal technique"></pre>
+      </section>
+
+      <!-- Réglage grand public (persona + voix par défaut, ticket 0014) : page
+           servie par le Dialogue Forge, montée en iframe. Reste chargée en
+           permanence (masquée), la console garde son canal RTVI vivant. -->
+      <section id="vue-reglages" hidden>
+        <p class="intro">
+          Choisissez le personnage et la voix par défaut de l'assistant. Ce
+          réglage s'applique aux prochaines conversations, mot d'éveil compris.
+        </p>
+        <iframe
+          id="reglage"
+          class="dialogue"
+          src="http://127.0.0.1:8600/reglage"
+          title="Réglages"
+        ></iframe>
+      </section>
     </main>
 
+    <!-- Bascule d'affichage entre surfaces. Fichier externe (la CSP de la
+         coquille interdit les scripts inline : script-src 'self'). -->
+    <script src="nav.js"></script>
     <script src="console.js"></script>
     <!-- Mot d'éveil (ticket 0010) : détection continue dans la webview, modèle
          vendoré local, zéro CDN (ADR 0012 décision 2). Module ES chargé APRÈS

@@ -1,6 +1,12 @@
 # Critères d'acceptation — Capacités (phases 3, 4, 5, 6)
 
-Issus de la session de grilling du 2026-07-02. Vocabulaire : voir CONTEXT.md (§ Quotidien, Actions, Agenda, Monde extérieur). Décisions : ADR 0007 (souveraineté), ADR 0008 (Pont hôte). Tout est jugé **à l'oral** : réponses courtes, sans markdown lu à voix haute, sans liste de liens.
+Issus de la session de grilling du 2026-07-02, réalignés sur la stack modulaire
+(ADR 0009) : l'orchestration (routage des outils MCP, personas) est tenue par le
+**Dialogue Forge**, l'interface par la **coquille** — plus d'OpenWebUI (abandonné,
+ADR 0009). Vocabulaire : voir CONTEXT.md (§ Quotidien, Actions, Agenda, Monde
+extérieur). Décisions : ADR 0007 (souveraineté), ADR 0008 (Pont hôte). Tout est
+jugé **à l'oral** : réponses courtes, sans markdown lu à voix haute, sans liste
+de liens.
 
 ## Scénario réponse sourcée
 
@@ -26,7 +32,7 @@ Issus de la session de grilling du 2026-07-02. Vocabulaire : voir CONTEXT.md (§
 ## Scénario rappel + annonce sur les enceintes
 
 1. « Rappelle-moi mercredi à 15 h d'appeler le dentiste » → le Time Forge crée un événement (rappel = annonce à l'heure dite) et confirme la date en clair.
-2. À l'échéance, sans conversation en cours, l'annonce est **synthétisée par le Voice Forge** (voix de l'assistant) puis **jouée sur les enceintes via le Pont hôte** (ADR 0008), doublée d'une notification visuelle dans OpenWebUI.
+2. À l'échéance, sans conversation en cours, l'annonce est **synthétisée par le Voice Forge** (voix de l'assistant) puis **jouée sur les enceintes via le Pont hôte** (ADR 0008), doublée d'une notification visuelle dans la coquille (la pastille, console fermée comprise — ADR 0010).
 
 ## Scénario minuteur
 
@@ -54,4 +60,4 @@ Issus de la session de grilling du 2026-07-02. Vocabulaire : voir CONTEXT.md (§
 - **Un seul pied hors Docker** (ADR 0008) : le Pont hôte, sans intelligence — il reçoit du wav prêt à jouer et n'exécute que la liste blanche. Le TTS reste centralisé dans le Voice Forge.
 - **Liste blanche fermée** : l'assistant n'a jamais accès à un shell ni à une commande arbitraire.
 - **100 % local, ports liés à 127.0.0.1** ; le Pont hôte, joignable via `host.docker.internal:8500`, écoute `0.0.0.0` en usage réel derrière un pare-feu limité au réseau Docker.
-- **Serveurs MCP** branchés dans OpenWebUI : `http://world:8300/mcp`, `http://time:8400/mcp`, `http://host.docker.internal:8500/mcp`.
+- **Serveurs MCP** consommés par le client MCP du Dialogue Forge (`DIALOGUE_FORGE_MCP_URLS`) : `http://world:8300/mcp`, `http://time:8400/mcp`, `http://host.docker.internal:8500/mcp`.

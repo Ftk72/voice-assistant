@@ -3,7 +3,7 @@
 Accès au monde extérieur pour l'assistant vocal (phase 6, ADR 0007 — souveraineté,
 pas isolement) : le LLM reste local, seules des requêtes anonymes sortent.
 
-## Capacités (outils MCP, consommés par OpenWebUI)
+## Capacités (outils MCP, consommés par le Dialogue Forge)
 
 - `web_search` — extraits du méta-moteur (SearXNG auto-hébergé) ; le LLM en fait
   une **réponse sourcée** (jamais de liste de liens, cf. CONTEXT.md).

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Réglages</title>
+    <link rel="stylesheet" href="/reglage/reglage.css" />
+  </head>
+  <body>
+    <main class="coquille">
+      <h1>Réglages</h1>
+      <p class="sub">Personnalité et voix par défaut de l'assistant.</p>
+
+      <div class="card">
+        <div class="ligne">
+          <span class="lbl">Personnalité</span>
+          <select id="sel-persona"></select>
+        </div>
+        <div class="ligne ligne-voix">
+          <span class="lbl">Voix</span>
+          <div class="colonne-voix">
+            <div class="muted" id="compte-voix"></div>
+            <div class="liste-voix" id="liste-voix"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="enregistrer">Enregistrer</button>
+        <span class="saved" id="confirmation" hidden>✓ Enregistré</span>
+      </div>
+    </main>
+
+    <script src="/reglage/reglage.js"></script>
+  </body>
+</html>

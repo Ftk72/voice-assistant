@@ -12,8 +12,12 @@ from app.memoire.fake import MemoireFactice
 from app.outils.base import MoteurOutils
 from app.outils.fake import OutilsFactices
 from app.personas import charger_personas
+from app.preferences import charger_preferences
 from app.routes.api import router
 from app.routes.module_dialogue import router as router_module_dialogue
+from app.routes.reglage import router as router_reglage
+from app.voix.base import CatalogueVoix
+from app.voix.fake import CatalogueVoixFactice
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +38,14 @@ def build_memoire(settings: Settings) -> MoteurMemoire:
     return MemoireFactice()
 
 
+def build_catalogue_voix(settings: Settings) -> CatalogueVoix:
+    if settings.voix_backend == "rest":
+        from app.voix.rest import CatalogueVoixREST
+
+        return CatalogueVoixREST(settings)
+    return CatalogueVoixFactice()
+
+
 def build_outils(settings: Settings) -> MoteurOutils:
     if settings.outils_backend == "mcp":
         from app.outils.mcp import OutilsMCP
@@ -47,6 +59,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     llm = build_llm(settings)
     memoire = build_memoire(settings)
     outils = build_outils(settings)
+    catalogue_voix = build_catalogue_voix(settings)
     personas = charger_personas(settings.personas_dir)
     orchestrateur = Orchestrateur(llm, memoire, outils, settings.max_iterations_outils)
 
@@ -58,7 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         logger.info("Dialogue Forge démarré (%d persona(s) chargé(s))", len(personas))
         yield
         # Ferme proprement les clients HTTP des adaptateurs réels, s'il y en a.
-        for composant in (llm, memoire):
+        for composant in (llm, memoire, catalogue_voix):
             fermer = getattr(composant, "aclose", None)
             if fermer is not None:
                 await fermer()
@@ -71,6 +84,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.personas = personas
     app.state.orchestrateur = orchestrateur
     app.state.conversations = {}
+    app.state.catalogue_voix = catalogue_voix
+    app.state.preferences = charger_preferences(settings.reglage_path, settings.persona_defaut)
     app.include_router(router)
     app.include_router(router_module_dialogue)
+    app.include_router(router_reglage)
     return app

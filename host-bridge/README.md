@@ -25,8 +25,8 @@ uv run python -m app
 ```
 
 Joignable depuis les conteneurs via `http://host.docker.internal:8500` (le Time
-Forge y envoie ses annonces ; OpenWebUI y branche le serveur MCP
-`http://host.docker.internal:8500/mcp`).
+Forge y envoie ses annonces ; le Dialogue Forge y branche le client MCP
+`http://host.docker.internal:8500/mcp` pour les actions du catalogue).
 
 ## Sécurité
 

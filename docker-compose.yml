@@ -146,6 +146,7 @@ services:
       MEMORY_FORGE_NEO4J_URI: bolt://neo4j:7687
       MEMORY_FORGE_NEO4J_PASSWORD: ${NEO4J_PASSWORD:?définir NEO4J_PASSWORD dans .env}
       MEMORY_FORGE_LLM_BASE_URL: http://llm:8080/v1
+      MEMORY_FORGE_INSIGHT_BACKEND: openai
       MEMORY_FORGE_EMBEDDER_BASE_URL: http://embedder:8080/v1
       MEMORY_FORGE_DOCUMENTS_DIR: /documents
     volumes:
@@ -256,8 +257,12 @@ services:
       # Client MCP de time / world / memory (noms de services Docker).
       DIALOGUE_FORGE_MCP_URLS: '["http://time:8400/mcp","http://world:8300/mcp","http://memory:8200/mcp"]'
       DIALOGUE_FORGE_PERSONAS_DIR: /personas
+      DIALOGUE_FORGE_VOIX_BACKEND: rest
+      DIALOGUE_FORGE_VOICE_FORGE_URL: http://voice-forge:8100
+      DIALOGUE_FORGE_REGLAGE_PATH: /data/reglage.json
     volumes:
       - ./personas:/personas:ro
+      - dialogue-forge-data:/data
     ports:
       - "127.0.0.1:8600:8600"
     depends_on:
@@ -279,3 +284,4 @@ volumes:
   voice-forge-cache:
   neo4j-data:
   time-forge-data:
+  dialogue-forge-data:

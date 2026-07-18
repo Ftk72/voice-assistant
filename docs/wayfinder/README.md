@@ -5,11 +5,14 @@ wayfinder vit ici, en markdown versionné — souverain, comme le reste.
 
 ## Conventions (« Wayfinding operations »)
 
-- **La carte** : `carte.md`, label `wayfinder:map` en frontmatter. C'est un
-  index : une décision vit dans son ticket, la carte la giste et la lie.
-- **Un ticket** : un fichier `tickets/NNNN-slug.md`. Son identité est son nom
-  de fichier ; son titre (`# …`) est son nom lisible — on s'y réfère toujours
-  par ce titre.
+- **Une carte** : un fichier `carte*.md` à la racine, label `wayfinder:map` en
+  frontmatter — plusieurs cartes (efforts) peuvent coexister. C'est un index :
+  une décision vit dans son ticket, la carte la giste et la lie.
+- **Un ticket** : un fichier `tickets/NNNN-slug.md` (numérotation unique,
+  toutes cartes confondues). Son identité est son nom de fichier ; son titre
+  (`# …`) est son nom lisible — on s'y réfère toujours par ce titre. Le
+  frontmatter `carte:` dit à quelle carte il appartient (absent = `carte.md`,
+  la carte historique).
 - **Frontmatter d'un ticket** :
   - `label: wayfinder:research | prototype | grilling | task`
   - `statut: ouvert | clos`

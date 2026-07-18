@@ -34,8 +34,11 @@ def personas_dir(tmp_path):
 
 
 @pytest.fixture
-def settings(personas_dir):
-    return Settings(personas_dir=personas_dir)
+def settings(personas_dir, tmp_path):
+    # Chemin de préférence hors du dossier des personas : chaque test part d'un
+    # fichier absent (repli sur le persona par défaut), et n'écrit jamais dans
+    # /data (chemin réel côté conteneur).
+    return Settings(personas_dir=personas_dir, reglage_path=tmp_path / "reglage.json")
 
 
 @pytest.fixture
