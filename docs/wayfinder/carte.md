@@ -81,42 +81,61 @@ wayfinder « plan, don't do ») jusqu'à la stack qui parle.
   réalignée ADR 0009 (README, ACCEPTANCE v2 = spec de 0011, plan de tests,
   CLAUDE.md) ; OpenWebUI purgé des docs vivantes ; mesures anciennes gardées en
   repères, cibles v2 en relatif (≤ 2 s).
+- [Atelier d'enrôlement de la vraie voix](tickets/0005-enrolement-de-la-vraie-voix.md)
+  — les deux voies validées au réel le 2026-07-17 : dépôt multi-format (décodage
+  **ffmpeg** en sous-processus, décision tranchée) et capture micro navigateur
+  (WebM/Opus → `decodeAudioData` → WAV PCM16).
+- [Clonage réel de la voix](tickets/0012-clonage-reel-de-la-voix.md) — la
+  prémisse était fausse : Chatterbox + torch 2.8/cu128 déjà en place, sm_120
+  franchi ; **clone français audible et propre** validé à l'oreille le
+  2026-07-17 (1,75 s en régime, pas de pagination LLM).
+- [Liste complète des voix enrôlées](tickets/0013-liste-complete-des-voix-enrolees.md)
+  — contrat cross-forge : **le Dialogue Forge proxie voice-forge** (`GET /voix`),
+  détail du contrat dans le ticket.
+- [Réglage grand public voix + persona](tickets/0014-reglage-grand-public-voix-persona.md)
+  — variante B (formulaire) retenue, **préférence permanente persistée** côté DF ;
+  onglet Réglages de la coquille validé au réel le 2026-07-18 (persona
+  assistant et voix Jackie).
+- [Bascule des consommateurs sur la vraie voix](tickets/0015-bascule-consommateurs-vraie-voix.md)
+  — **voix par défaut système : Jackie** (choix utilisateur) sur les trois
+  consommateurs (annonces time-forge, `tts_voix_defaut` du transport, persona
+  assistant) ; annonce enceintes validée à l'oreille le 2026-07-18.
 
 ## Pas encore spécifié
 
-- **Enrôlement de la vraie voix — re-cartographié le 2026-07-17** (grilling
-  utilisateur) : l'ancien 0005 étroit est éclaté en un atelier d'enrôlement
-  (capture micro + **dépôt multi-format**, 0005 réécrit), le **clonage réel
-  Chatterbox sur RTX 5080** (0012, pilier « faire marcher pour de vrai »), le
-  cadrage de la **liste complète des voix cross-forge** (0013, ex-« reste
-  ouvert » du 0008), un **réglage grand-public voix+persona dans la coquille**
-  (0014, surface neuve distincte de la console A4) et la **bascule des
-  consommateurs** (0015). Restent en brume, contingents à ces tickets :
-  - **Qualité du clone à l'oreille** — une fois 0012 audible, décider si le
-    zero-shot une-prise suffit ou s'il faut plusieurs échantillons / régler
-    `exaggeration`/`cfg_weight` par voix (`config.json`) ; sharp seulement après
-    avoir entendu.
-  - **Formats acceptés & limite de taille** du dépôt multi-format — dépend de la
-    décision de décodage tranchée en 0005.
-- **Ce que le run réel révélera** : sample_rate réel de voice-forge vs
-  pipeline, comportement getUserMedia/WebView2, événements RTVI réels — des
-  correctifs naîtront du ticket « Run réel bout-en-bout sur Windows », de
-  nature inconnaissable avant.
-- **Presets audio casque / haut-parleurs** : si le run réel sur haut-parleurs
-  produit de fausses interruptions (AEC insuffisante), la bascule preset
-  (glossaire) se ticketera — côté coquille + transport.
-- **Arbitrage latence** : si la voix→voix mesurée dépasse la cible ≤ 2 s
+<!-- Nettoyage du 2026-07-18 : les nappes levées par 0002/0003/0005/0012/0014/0015
+     sont sorties d'ici — « Qualité du clone à l'oreille » a gradué en ticket 0023,
+     « formats acceptés » est tranché par le décodage ffmpeg (0005), « contrat voix
+     par défaut » par 0014+0015, « sort des mesures » par 0002, et les correctifs
+     du run réel sont nés puis absorbés (0003, 0007, 0008, 0010). -->
+
+- **Presets audio casque / haut-parleurs** : si la recette (0011) sur
+  haut-parleurs produit de fausses interruptions (AEC insuffisante), la bascule
+  preset (glossaire) se ticketera — côté coquille + transport.
+- **Montée Chatterbox V3** (grilling fidélité du 2026-07-18) : l'amont annonce
+  une similarité locuteur et une stabilité meilleures — gros téléchargement
+  (lancé par l'utilisateur) et compatibilité torch 2.8/sm_120 à requalifier.
+  Ne se tickete que si l'escalade douce du ticket
+  [Qualité du clone à l'oreille](tickets/0023-qualite-du-clone-a-l-oreille.md)
+  (échantillon soigné + réglages par voix) laisse le verdict d'oreille
+  insuffisant.
+- **Arbitrage latence** : si la voix→voix mesurée en 0011 dépasse la cible ≤ 2 s
   (mur connu : TTS non streamé 1,72 s sur l'ancienne stack), décider quoi
   relâcher — la cible, ou engager le TTS streamé (dont l'exécution est hors
   carte, chantier C2).
-- **Contrat voix par défaut / voix d'annonce** au-delà de l'enrôlement
-  (reste du lot B2) : qui détient la voix par défaut système, comment elle se
-  change depuis `/admin`.
-- **Sort des mesures de référence** de l'ancienne stack (2,88 s voix→voix…)
-  dans ACCEPTANCE v2 : références historiques ou critères réactualisés.
 
 ## Hors périmètre
 
+- **Limite de taille du dépôt de voix** (reliquat de la nappe « formats &
+  limite » levée par 0005) : les formats sont tranchés (tout ce que ffmpeg
+  décode, sinon 415) ; borner la taille des fichiers déposés est du
+  durcissement qui ne conditionne pas la destination — app locale, mono-
+  utilisateur.
+- **Changement de la voix d'annonce depuis une UI** : la voix par défaut
+  système vit dans compose/config (décidé en
+  [Bascule des consommateurs sur la vraie voix](tickets/0015-bascule-consommateurs-vraie-voix.md)),
+  le réglage utilisateur passe par l'onglet Réglages (0014) ; une UI dédiée à
+  la voix d'annonce est du confort au-delà de la destination.
 - **C1 proactivité, C2 Qwen3-TTS / TTS streamé, C3 identification du
   locuteur, C4 vision d'écran** — la roadmap « Ensuite » reprend après la
   destination.

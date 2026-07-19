@@ -23,11 +23,25 @@ Forge — n'a pas d'équivalent natif et passe par notre port `ClientDialogue`
 """
 
 import logging
+import wave
+from pathlib import Path
 
 from app.config import Settings
 from app.transport.base import Transport
 
 logger = logging.getLogger(__name__)
+
+
+def _charger_wav_pcm16(chemin: Path) -> tuple[bytes, int, int]:
+    """Lit un WAV PCM16 (module standard, aucune dépendance de décodage) et
+    renvoie (échantillons, fréquence, canaux) — ce que veut `OutputAudioRawFrame`.
+
+    Le fichier attendu est déjà au format cible (PCM16, cf. `assets/README.md`) :
+    aucune conversion ici, c'est fait une fois pour toutes en amont (ffmpeg)."""
+    with wave.open(str(chemin), "rb") as f:
+        if f.getsampwidth() != 2:
+            raise ValueError(f"{chemin} n'est pas en PCM 16 bits (sampwidth={f.getsampwidth()})")
+        return f.readframes(f.getnframes()), f.getframerate(), f.getnchannels()
 
 
 class TransportPipecat(Transport):
@@ -55,7 +69,7 @@ class TransportPipecat(Transport):
         session. ⚠️ Jamais exécuté à ce jour."""
         # --- Imports différés (extra `pipecat` uniquement) ---
         from pipecat.audio.vad.silero import SileroVADAnalyzer
-        from pipecat.frames.frames import TTSSpeakFrame
+        from pipecat.frames.frames import OutputAudioRawFrame
         from pipecat.pipeline.pipeline import Pipeline
         from pipecat.pipeline.worker import PipelineParams, PipelineWorker
         from pipecat.processors.audio.vad_processor import VADProcessor
@@ -71,6 +85,10 @@ class TransportPipecat(Transport):
         from app.transport.tts_voiceforge import ServiceTTSVoiceForge
 
         s = self._settings
+
+        # Accueil pré-enregistré (WAV statique, pas de synthèse) : lu une fois
+        # par connexion, coût négligeable (~100 Ko).
+        accueil_audio, accueil_taux, accueil_canaux = _charger_wav_pcm16(s.accueil_audio_path)
 
         transport = SmallWebRTCTransport(
             webrtc_connection=connexion,
@@ -149,10 +167,19 @@ class TransportPipecat(Transport):
 
         @transport.event_handler("on_client_connected")
         async def _connecte(_transport: object, _client: object) -> None:
-            # Prototype : confirmation vocale à la connexion. Bisecte la voie
-            # **sortante** (TTS voice-forge → WebRTC) indépendamment du
-            # micro/STT — si on l'entend, seule l'entrée reste à corriger.
-            await worker.queue_frames([TTSSpeakFrame("Bonjour, je t'entends.")])
+            # Accueil à la connexion : WAV pré-enregistré joué tel quel (frame
+            # audio brute, pas de TTS) — bisecte la voie **sortante**
+            # (WebRTC) indépendamment du micro/STT — si on l'entend, seule
+            # l'entrée reste à corriger.
+            await worker.queue_frames(
+                [
+                    OutputAudioRawFrame(
+                        audio=accueil_audio,
+                        sample_rate=accueil_taux,
+                        num_channels=accueil_canaux,
+                    )
+                ]
+            )
 
         @transport.event_handler("on_client_disconnected")
         async def _deconnecte(_transport: object, _client: object) -> None:

@@ -83,6 +83,28 @@ def test_un_format_indecodable_renvoie_415(client):
     assert import_fichier(client, "Emma", b"octets illisibles", "voix.xyz").status_code == 415
 
 
+def test_un_wav_faible_est_normalise_a_l_enrolement(client, voices_dir):
+    import array
+    import io
+    import math
+    import wave
+
+    tampon = io.BytesIO()
+    with wave.open(tampon, "wb") as sortie:
+        sortie.setnchannels(1)
+        sortie.setsampwidth(2)
+        sortie.setframerate(24_000)
+        faible = [round(1000 * math.sin(2 * math.pi * 440 * i / 24_000)) for i in range(24_000)]
+        sortie.writeframes(array.array("h", faible).tobytes())
+
+    assert import_fichier(client, "Emma", tampon.getvalue(), "voix.wav").status_code == 201
+
+    with wave.open(io.BytesIO((voices_dir / "Emma" / "speaker.wav").read_bytes())) as stocke:
+        echantillons = array.array("h", stocke.readframes(stocke.getnframes()))
+    rms = math.sqrt(sum(v * v for v in echantillons) / len(echantillons))
+    assert abs(20 * math.log10(rms / 32768) - (-20.0)) < 0.5  # RMS cible atteint
+
+
 def test_les_noms_dangereux_sont_rejetes(client):
     for name in ["../evil", "a/b", "", "x" * 51]:
         assert import_voice(client, name).status_code == 422, name

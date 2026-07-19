@@ -3,6 +3,7 @@ import shutil
 from pathlib import Path
 
 from app.schemas import Voice
+from app.voices.normalisation import normaliser_wav_pcm16
 
 # Lettres (accents inclus), chiffres, espace, apostrophe, tiret, underscore — jamais de
 # séparateur de chemin ni de point : le nom devient un nom de dossier sous voices/.
@@ -28,12 +29,18 @@ class VoiceManager:
         return candidate if candidate.is_file() else None
 
     def create_voice(self, name: str, speaker_bytes: bytes) -> Voice:
-        """Crée voices/name/speaker.wav. Lève FileExistsError si le nom est pris."""
+        """Crée voices/name/speaker.wav, normalisé en niveau (meilleur-effort).
+
+        Lève FileExistsError si le nom est pris. La normalisation couvre les deux
+        voies d'enrôlement (capture micro et dépôt, décodé ou non) : Chatterbox
+        recopie le niveau de la référence, une référence faible ferait un clone
+        faible (ticket wayfinder 0023).
+        """
         voice_dir = self._voices_dir / name
         if voice_dir.exists():
             raise FileExistsError(name)
         voice_dir.mkdir(parents=True)
-        (voice_dir / "speaker.wav").write_bytes(speaker_bytes)
+        (voice_dir / "speaker.wav").write_bytes(normaliser_wav_pcm16(speaker_bytes))
         return Voice(id=name, name=name)
 
     def delete_voice(self, voice_id: str) -> bool:

@@ -1,6 +1,11 @@
+from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# WAV d'accueil joué tel quel (pas de synthèse) à l'ouverture de la
+# conversation — voir Settings.accueil_audio_path.
+ACCUEIL_AUDIO_PAR_DEFAUT = Path(__file__).resolve().parent / "assets" / "accueil.wav"
 
 
 class Settings(BaseSettings):
@@ -29,10 +34,14 @@ class Settings(BaseSettings):
     stt_model: str = "whisper"
     stt_api_key: str = "sk-local"
     # TTS voice-forge (OpenAI-compat). Persona figé ⇒ voix constante par
-    # conversation (ADR 0012 décision 4) ; la VoixDeTest est le défaut du dépôt.
+    # conversation (ADR 0012 décision 4) ; Jackie est la vraie voix clonée par
+    # défaut du dépôt (ticket wayfinder 0015).
     tts_model: str = "voiceforge"
     tts_api_key: str = "sk-local"
-    tts_voix_defaut: str = "VoixDeTest"
+    tts_voix_defaut: str = "Jackie"
+    # WAV pré-enregistré joué à la connexion (bisecte la voie sortante) au lieu
+    # d'une phrase synthétisée : PCM16 mono 24 kHz attendu (cf. assets/README).
+    accueil_audio_path: Path = ACCUEIL_AUDIO_PAR_DEFAUT
     # Origines autorisées à appeler le transport en cross-origin : la coquille
     # (Tauri v2 sert son front sous http://tauri.localhost sur Windows/WebView2 ;
     # variantes selon plateforme). Sans elles, le préflight OPTIONS /offer est

@@ -218,8 +218,8 @@ services:
       TIME_FORGE_ANNOUNCER: hostbridge
       TIME_FORGE_VOICE_FORGE_URL: http://voice-forge:8100
       # Voix des annonces — doit exister dans le Voice Forge (sinon 400
-      # « Voix inconnue » silencieux). À changer à l'enrôlement de la vraie voix.
-      TIME_FORGE_ANNOUNCE_VOICE: VoixDeTest
+      # « Voix inconnue » silencieux). Vraie voix clonée (ticket wayfinder 0015).
+      TIME_FORGE_ANNOUNCE_VOICE: Jackie
       TIME_FORGE_HOST_BRIDGE_URL: http://host.docker.internal:8500
       # Jeton partagé du Pont hôte — même valeur que HOST_BRIDGE_TOKEN au
       # lancement du Pont (fichier .env non versionné).
