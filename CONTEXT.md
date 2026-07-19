@@ -72,13 +72,23 @@ Glossaire du domaine. Uniquement le vocabulaire — aucun détail d'implémentat
 
 **Minuteur** — Un compte à rebours court et éphémère (« mets un minuteur pâtes de 8 minutes »), précis à la seconde, qui produit une annonce à l'échéance. Distinct du rappel : il ne survit pas à son échéance.
 
-## Termes — Actions (phase 4)
+## Termes — Agir (phase 4, ADR 0013)
 
-**Action** — Une opération sur la machine hôte (ouvrir une application ou un fichier, lancer un script personnel, régler le volume, piloter la musique), déclenchée à la voix. L'assistant ne peut exécuter que des actions du catalogue, jamais une commande arbitraire.
+**Action Forge** — Le composant sur mesure de l'agir : il reçoit une Tâche, la mène en boucle CodeAct dans un Atelier et en restitue le Compte rendu. Le seul cerveau qui planifie l'agir — l'orchestrateur de dialogue transmet, il ne décompose pas.
 
-**Catalogue d'actions** — La liste blanche fermée des actions disponibles, définie et nommée à l'avance par l'utilisateur. Extensible sans modifier l'assistant.
+**Tâche** — Ce que l'utilisateur confie à la voix pour être fait (« convertis les photos du dossier d'échange ») : un énoncé en français libre, transmis tel que dit. Bornée par l'Action Forge (budget de pas, durée), elle aboutit à un Compte rendu — ou échoue proprement.
 
-**Pont hôte** — Le composant qui donne pied à l'assistant sur la machine hôte, hors des conteneurs : il joue les annonces sur les enceintes et exécute les actions du catalogue. Sans intelligence : il ne décide rien, il exécute.
+**Action** — Un pas de la boucle d'une Tâche : du code exécuté dans l'Atelier (paradigme CodeAct), suivi de son observation. Jamais une opération sur l'hôte — pour l'hôte, voir Commande du catalogue. (Redéfini par l'ADR 0013 ; l'ancien sens de phase 4 est devenu « Commande du catalogue ».)
+
+**Atelier** — Le bac à sable jetable où les Actions s'exécutent : un par Tâche, outillé, borné, détruit après le Compte rendu. Il ne voit jamais le dépôt, les secrets ni le socket Docker ; son seul montage est le sous-dossier de sa Tâche dans le dossier d'échange.
+
+**Dossier d'échange** — Le seul lieu de passage de fichiers entre l'utilisateur et l'Atelier : un dossier hôte dédié, un sous-dossier par Tâche, où l'on dépose l'entrée et récupère le résultat.
+
+**Compte rendu** — Ce que la voix restitue d'une Tâche achevée ou échouée : quelques phrases en français, jamais la lecture du journal des Actions.
+
+**Commande du catalogue** — Une opération sur la machine hôte (ouvrir une application, régler le volume, lancer un script personnel), déclenchée à la voix. Uniquement depuis la liste blanche fermée, définie et nommée à l'avance par l'utilisateur — jamais une commande arbitraire sur l'hôte. (Anciennement « Action » ; renommée par l'ADR 0013.)
+
+**Pont hôte** — Le composant qui donne pied à l'assistant sur la machine hôte, hors des conteneurs : il joue les annonces sur les enceintes et exécute les commandes du catalogue. Sans intelligence : il ne décide rien, il exécute.
 
 ## Termes — Agenda (phase 5)
 
