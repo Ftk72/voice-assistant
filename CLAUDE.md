@@ -18,6 +18,8 @@ docs, commits.
   dans les documents plus anciens (README, ACCEPTANCE, plan-de-tests…).
 - `docs/handoffs/` — seul le plus récent fait foi ; en générer un via `/handoff`
   en fin de session.
+- `docs/wayfinder/` — le tracker local (cartes + tickets) ; conventions dans
+  son README.
 
 ## Méthode de travail
 
@@ -33,10 +35,32 @@ docs, commits.
   croyances des handoffs se vérifient, ne se croient pas.
 - Toute piste morte se capture à chaud dans `docs/impasses.md` (`/impasses`) ;
   consulter ce registre avant tout diagnostic.
+- **Réconciliation des étiquettes de statut** (péremption par événement, jamais
+  par âge) : tout ADR accepté → la même session relit la mémoire agent et le
+  §État particulier ci-dessous et périme ce que l'ADR vient de tuer ; tout
+  premier run réel d'un adaptateur → la même session retire son étiquette
+  « jamais exécuté à ce jour » (docstring et §État particulier).
 - Toute commande que **l'utilisateur** doit exécuter suit `/newbie` : une fenêtre
   par bloc, environnement déclaré, bloc autonome (état + `cd` + commande dans une
   seule zone copiable), sort de la fenêtre et signe de succès. Rien ne s'écrit
   sans être sourcé — la topologie ci-dessous fait foi, jamais la supposition.
+- **Validé au réel avant de clore** : à l'oreille pour l'audio, au `curl`
+  chronométré pour la latence — jamais sur la seule foi des tests ou des logs.
+- **Mines de skills** : ne jamais invoquer ici `implement`, `setup-pre-commit`,
+  `resolving-merge-conflicts`, `scaffold-exercises` (ils commitent) ni
+  `ubiquitous-language` (glossaire concurrent de CONTEXT.md).
+
+### Seuils de décision (compilés du CIR — `docs/cerp/cir.md`)
+
+- Un second LLM ? **Non par défaut** — déterministe d'abord ; LLM seulement si
+  son échec se constate.
+- Un garde-fou/une complexité défensive ? **Non tant que le problème ne se
+  constate pas** — chemin nominal + point d'audit.
+- Une dépendance/un serving ? Filtres dans l'ordre : **zéro re-build de la
+  chaîne CUDA sm_120** → licence permissive (véto) → source vérifiée par API →
+  budget VRAM.
+- Une refonte ? **Big bang pour ce qu'on abandonne, progressif pour ce qu'on
+  conserve.**
 
 ## Conventions des forges (dialogue-forge, voice-forge, memory-forge, world-forge, time-forge, host-bridge)
 
