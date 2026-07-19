@@ -4,9 +4,18 @@ from mcp.server.transport_security import TransportSecuritySettings
 from app.graph.base import GraphMemory
 from app.insight import raconter
 from app.insight.base import GenerateurInsight
+from app.interrogation import interroger
+from app.interrogation.base import TraducteurQuestion
+from app.interrogation.executeur import ExecuteurCypher
+from app.schemas import InterrogationIn
 
 
-def build_mcp(graph: GraphMemory, insight: GenerateurInsight) -> FastMCP:
+def build_mcp(
+    graph: GraphMemory,
+    insight: GenerateurInsight,
+    traducteur: TraducteurQuestion,
+    executeur: ExecuteurCypher,
+) -> FastMCP:
     """Outils MCP consommés par le client natif d'OpenWebUI (recall/forget, ADR 0005)."""
     mcp = FastMCP(
         "memory-forge",
@@ -64,5 +73,23 @@ def build_mcp(graph: GraphMemory, insight: GenerateurInsight) -> FastMCP:
     )
     async def raconter_memoire() -> str:
         return (await raconter(graph, insight)).insight
+
+    @mcp.tool(
+        description=(
+            "Pose une question précise à la mémoire persistante (« que sait-on de… », « quel "
+            "est le lien entre X et Y », « depuis quand… », « combien de… ») : la question est "
+            "traduite en requête exécutée sur le graphe réel, la réponse ne cite que ce qui y "
+            "est trouvé. Restitue oralement la réponse, source comprise (« d'après N faits du "
+            "graphe ») ; si rien n'est trouvé, dis-le franchement, n'invente jamais."
+        )
+    )
+    async def interroger_memoire(question: str) -> str:
+        resultat = await interroger(
+            graph, traducteur, executeur, InterrogationIn(question=question)
+        )
+        nb_faits = len(resultat.monologue.resultats)
+        if nb_faits == 0:
+            return resultat.reponse or "Je n'ai rien trouvé dans le graphe à ce sujet."
+        return f"{resultat.reponse} (d'après {nb_faits} fait(s) du graphe)"
 
     return mcp

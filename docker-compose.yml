@@ -147,6 +147,7 @@ services:
       MEMORY_FORGE_NEO4J_PASSWORD: ${NEO4J_PASSWORD:?définir NEO4J_PASSWORD dans .env}
       MEMORY_FORGE_LLM_BASE_URL: http://llm:8080/v1
       MEMORY_FORGE_INSIGHT_BACKEND: openai
+      MEMORY_FORGE_INTERROGATION_BACKEND: openai   # interroger la mémoire (ticket 0028)
       MEMORY_FORGE_EMBEDDER_BASE_URL: http://embedder:8080/v1
       MEMORY_FORGE_DOCUMENTS_DIR: /documents
     volumes:

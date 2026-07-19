@@ -2,6 +2,8 @@ import pytest
 
 from app.graph.fake import InMemoryGraph
 from app.insight.fake import GenerateurInsightFactice
+from app.interrogation.executeur import ExecuteurCypherFactice
+from app.interrogation.fake import TraducteurQuestionFactice
 from app.mcp_server import build_mcp
 from app.schemas import EpisodeIn
 
@@ -22,7 +24,9 @@ async def call_tool(mcp, name: str, arguments: dict) -> str:
 
 
 async def test_recall_renvoie_les_faits_avec_leur_provenance(graph):
-    mcp = build_mcp(graph, GenerateurInsightFactice())
+    mcp = build_mcp(
+        graph, GenerateurInsightFactice(), TraducteurQuestionFactice(), ExecuteurCypherFactice()
+    )
 
     answer = await call_tool(mcp, "recall", {"query": "judo"})
 
@@ -31,7 +35,9 @@ async def test_recall_renvoie_les_faits_avec_leur_provenance(graph):
 
 
 async def test_recall_sans_resultat_le_dit_explicitement(graph):
-    mcp = build_mcp(graph, GenerateurInsightFactice())
+    mcp = build_mcp(
+        graph, GenerateurInsightFactice(), TraducteurQuestionFactice(), ExecuteurCypherFactice()
+    )
 
     answer = await call_tool(mcp, "recall", {"query": "escalade"})
 
@@ -39,7 +45,9 @@ async def test_recall_sans_resultat_le_dit_explicitement(graph):
 
 
 async def test_forget_supprime_et_annonce_le_compte(graph):
-    mcp = build_mcp(graph, GenerateurInsightFactice())
+    mcp = build_mcp(
+        graph, GenerateurInsightFactice(), TraducteurQuestionFactice(), ExecuteurCypherFactice()
+    )
 
     answer = await call_tool(mcp, "forget", {"entity": "Léa"})
 
@@ -48,7 +56,9 @@ async def test_forget_supprime_et_annonce_le_compte(graph):
 
 
 async def test_raconter_memoire_renvoie_un_paragraphe(graph):
-    mcp = build_mcp(graph, GenerateurInsightFactice())
+    mcp = build_mcp(
+        graph, GenerateurInsightFactice(), TraducteurQuestionFactice(), ExecuteurCypherFactice()
+    )
 
     answer = await call_tool(mcp, "raconter_memoire", {})
 

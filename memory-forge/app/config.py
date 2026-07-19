@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     backend: Literal["fake", "graphiti"] = "fake"
     # Récit du graphe mémoire (ticket wayfinder 0020) : le réel réutilise llm_base_url.
     insight_backend: Literal["fake", "openai"] = "fake"
+    # Interrogation façon LinkQ (ticket 0028) : le réel réutilise llm_base_url ;
+    # l'exécuteur Cypher, lui, suit `backend` (graphiti → Neo4j, sinon factice).
+    interrogation_backend: Literal["fake", "openai"] = "fake"
     # Ingestion documentaire (phase 4) — désactivée si aucun dossier n'est fourni.
     documents_dir: Path | None = None
     documents_poll_seconds: float = 10.0  # polling mtime, fiable sur bind-mounts WSL

@@ -10,6 +10,9 @@ from app.graph.fake import InMemoryGraph
 from app.ingest.watcher import DocumentWatcher
 from app.insight.base import GenerateurInsight
 from app.insight.fake import GenerateurInsightFactice
+from app.interrogation.base import TraducteurQuestion
+from app.interrogation.executeur import ExecuteurCypher, ExecuteurCypherFactice
+from app.interrogation.fake import TraducteurQuestionFactice
 from app.mcp_server import build_mcp
 from app.routes.api import router
 from app.schemas import EpisodeIn
@@ -31,6 +34,24 @@ def build_generateur_insight(settings: Settings) -> GenerateurInsight:
 
         return GenerateurInsightOpenAI(settings.llm_base_url)
     return GenerateurInsightFactice()
+
+
+def build_traducteur(settings: Settings) -> TraducteurQuestion:
+    if settings.interrogation_backend == "openai":
+        from app.interrogation.openai_compat import TraducteurQuestionOpenAI
+
+        return TraducteurQuestionOpenAI(settings.llm_base_url)
+    return TraducteurQuestionFactice()
+
+
+def build_executeur(settings: Settings) -> ExecuteurCypher:
+    """L'exécuteur suit le backend graphe : graphiti → le vrai Neo4j de la
+    stack, sinon le factice (le canal d'interrogation ne trouve alors rien)."""
+    if settings.backend == "graphiti":
+        from app.interrogation.executeur_neo4j import ExecuteurCypherNeo4j
+
+        return ExecuteurCypherNeo4j(settings)
+    return ExecuteurCypherFactice()
 
 
 async def extraction_worker(queue: asyncio.Queue[EpisodeIn], graph: GraphMemory) -> None:
@@ -64,7 +85,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     graph = build_graph(settings)
     insight = build_generateur_insight(settings)
-    mcp = build_mcp(graph, insight)
+    traducteur = build_traducteur(settings)
+    executeur = build_executeur(settings)
+    mcp = build_mcp(graph, insight, traducteur, executeur)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -86,6 +109,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.graph = graph
     app.state.insight = insight
+    app.state.traducteur = traducteur
+    app.state.executeur = executeur
     app.state.queue = asyncio.Queue()
     app.include_router(router)
     app.mount("/mcp", mcp.streamable_http_app())

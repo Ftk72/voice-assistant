@@ -1,7 +1,7 @@
 ---
 label: wayfinder:grilling
-statut: ouvert
-assigne:
+statut: clos
+assigne: session-2026-07-19
 bloque-par: []
 carte: carte-graphe-memoire
 ---
@@ -75,6 +75,29 @@ Architecture actée, reste à livrer :
   `GenerateurInsight` (0020).
 - **Hors périmètre** : multi-tours complet avec historique de session,
   grammaire URL adressable, toute écriture sur le graphe par ce canal.
+
+## Livraison (2026-07-19)
+
+Le rendu est livré (146 tests verts, ruff OK) et **validé à l'œil par
+l'utilisateur le 2026-07-19** sur la stack réelle (llama.cpp + Neo4j) — les
+deux adaptateurs réels ont tourné au réel ce jour-là, leurs étiquettes
+« jamais exécuté à ce jour » sont retirées :
+
+- `app/interrogation/` : résolution floue serveur (casse/accents/sous-chaîne/
+  tirets), cinq gabarits sur le schéma Graphiti réel, garde-fous du repli
+  libre (rejet écriture + `LIMIT` imposé + une seule instruction), port
+  `TraducteurQuestion` (factice + llama.cpp « jamais exécuté à ce jour »),
+  port `ExecuteurCypher` (factice + Neo4j lecture seule/timeout « jamais
+  exécuté à ce jour »), service partagé `interroger()`.
+- `POST /interroger` (question OU requête à rejouer sans LLM, 400 sur clause
+  d'écriture), outil MCP `interroger_memoire` (sourcing « d'après N fait(s)
+  du graphe », franc si rien).
+- `/viz` : section « Interroger » (réponse, monologue — entités
+  reconnues/non résolues, gabarit, requête éditable + paramètres, résultats
+  bruts —, rejeu sans LLM) et `appliquerVue(etat)` (contrat 0025, exposée sur
+  `window`) branchée sur la mécanique de focus existante.
+- Compose : `MEMORY_FORGE_INTERROGATION_BACKEND: openai` sur le service
+  memory.
 
 ## Critère de clôture
 
