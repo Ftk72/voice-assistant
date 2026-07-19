@@ -1,7 +1,9 @@
 from datetime import UTC, datetime
 
+import httpx
+
 from app.config import Settings
-from app.graph.base import GraphMemory
+from app.graph.base import CibleIntrouvable, CorrectionRefusee, GraphMemory
 from app.graph.ontologie import TYPES_D_ENTITES
 from app.schemas import (
     EpisodeIn,
@@ -34,14 +36,11 @@ def _provenance_depuis_description(description: str | None) -> Provenance:
 
 
 class GraphitiMemory(GraphMemory):
-    """Adaptateur Graphiti + Neo4j (ADR 0005).
-
-    ⚠️ Écrit d'après la documentation de graphiti-core, jamais exécuté (dépendances
-    non installées à l'écriture — connexion lente). À valider au premier lancement
-    réel, comme _RealChatterboxEngine côté voice-forge.
-    """
+    """Adaptateur Graphiti + Neo4j (ADR 0005) — tourne au réel depuis début
+    juillet 2026 (extraction, recherche, /viz, corrections du ticket 0029)."""
 
     def __init__(self, settings: Settings) -> None:
+        self._embedder_base_url = settings.embedder_base_url
         try:
             from graphiti_core import Graphiti
             from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
@@ -153,6 +152,7 @@ class GraphitiMemory(GraphMemory):
                 OPTIONAL MATCH (ep:Episodic) WHERE ep.uuid IN r.episodes
                 RETURN a.name AS source, b.name AS target, r.uuid AS uuid,
                        r.fact AS text, r.valid_at AS valid_at, r.invalid_at AS invalid_at,
+                       r.corrige_le AS corrige_le, r.corrige_geste AS corrige_geste,
                        collect(ep.source_description)[0] AS source_description
                 """,
                 names=sorted(frontier),
@@ -172,6 +172,9 @@ class GraphitiMemory(GraphMemory):
                         provenance=_provenance_depuis_description(record["source_description"]),
                         valid_at=_en_datetime(record["valid_at"]),
                         invalid_at=_en_datetime(record["invalid_at"]),
+                        uuid=record["uuid"],
+                        corrige_le=_en_datetime(record["corrige_le"]),
+                        corrige_geste=record["corrige_geste"],
                     )
                 )
             frontier = reached - visited
@@ -180,8 +183,7 @@ class GraphitiMemory(GraphMemory):
         return GraphNeighborhood(center=entity, nodes=sorted(nodes), edges=edges)
 
     async def graphe_complet(self, limite: int = 500) -> GrapheComplet:
-        """⚠️ Jamais exécutée (comme le reste de l'adaptateur) : à valider au premier
-        lancement réel avec Neo4j peuplé. Deux requêtes Cypher : les nœuds les plus
+        """Deux requêtes Cypher : les nœuds les plus
         connectés (degré décroissant) jusqu'à `limite`, puis les arêtes qui les relient
         entre eux (même contrat que `neighborhood` — provenance et validité comprises,
         faits obsolètes marqués, jamais omis)."""
@@ -197,7 +199,10 @@ class GraphitiMemory(GraphMemory):
             WITH n, count(r) AS degre
             ORDER BY degre DESC, n.name ASC
             LIMIT $limite
-            RETURN n.name AS nom
+            RETURN n.name AS nom, n.uuid AS uuid,
+                   [l IN labels(n) WHERE l <> 'Entity'][0] AS type,
+                   n.corrige_le AS corrige_le, n.corrige_geste AS corrige_geste,
+                   n.nom_precedent AS nom_precedent, n.type_precedent AS type_precedent
             """,
             limite=limite,
         )
@@ -210,6 +215,7 @@ class GraphitiMemory(GraphMemory):
             OPTIONAL MATCH (ep:Episodic) WHERE ep.uuid IN r.episodes
             RETURN a.name AS source, b.name AS target, r.uuid AS uuid,
                    r.fact AS text, r.valid_at AS valid_at, r.invalid_at AS invalid_at,
+                   r.corrige_le AS corrige_le, r.corrige_geste AS corrige_geste,
                    collect(ep.source_description)[0] AS source_description
             """,
             noms=noms,
@@ -228,10 +234,124 @@ class GraphitiMemory(GraphMemory):
                     provenance=_provenance_depuis_description(record["source_description"]),
                     valid_at=_en_datetime(record["valid_at"]),
                     invalid_at=_en_datetime(record["invalid_at"]),
+                    uuid=record["uuid"],
+                    corrige_le=_en_datetime(record["corrige_le"]),
+                    corrige_geste=record["corrige_geste"],
                 )
             )
-        noeuds = [NoeudGraphe(nom=nom) for nom in noms]
+        noeuds = [
+            NoeudGraphe(
+                nom=record["nom"],
+                uuid=record["uuid"],
+                type=record["type"],
+                corrige_le=_en_datetime(record["corrige_le"]),
+                corrige_geste=record["corrige_geste"],
+                nom_precedent=record["nom_precedent"],
+                type_precedent=record["type_precedent"],
+            )
+            for record in noeud_records
+        ]
         return GrapheComplet(noeuds=noeuds, aretes=aretes, tronque=total > limite)
+
+    async def corriger_type(self, uuid: str, type_: str) -> None:
+        """Corrige le type (mal extrait) d'une entité — le type d'une entité est un
+        label Neo4j autre que `Entity` (convention Graphiti, cf. ontologie.py).
+        `type_` doit être une clé de `TYPES_D_ENTITES` (liste blanche) : seul cas
+        où l'interpolation de label dans la chaîne Cypher est admise, les labels
+        ne sont pas paramétrables en Cypher."""
+        if type_ not in TYPES_D_ENTITES:
+            raise ValueError(f"type hors liste blanche : {type_!r}")
+        retirer_anciens_types = "\n".join(f"REMOVE n:{t}" for t in TYPES_D_ENTITES)
+        records, _, _ = await self._graphiti.driver.execute_query(
+            f"""
+            MATCH (n:Entity {{uuid: $uuid}})
+            WITH n, [l IN labels(n) WHERE l <> 'Entity'][0] AS ancien_type
+            {retirer_anciens_types}
+            SET n:{type_}
+            SET n.labels = ['Entity', $type_],
+                n.type_precedent = ancien_type,
+                n.corrige_le = datetime(),
+                n.corrige_geste = 'type'
+            RETURN n.uuid AS uuid
+            """,
+            uuid=uuid,
+            type_=type_,
+        )
+        if not records:
+            raise CibleIntrouvable(uuid)
+
+    async def renommer_entite(self, uuid: str, nom: str) -> None:
+        """Renomme une entité mal orthographiée et recalcule son `name_embedding`
+        (sinon `/search` continuerait de raisonner sur l'ancienne orthographe) :
+        POST OpenAI-compat vers l'embedder local, puis écriture Cypher. Les
+        textes des faits (`r.fact`) ne sont jamais touchés (citations
+        historiques)."""
+        async with httpx.AsyncClient() as client:
+            reponse = await client.post(
+                f"{self._embedder_base_url}/embeddings",
+                json={"input": [nom], "model": "bge-m3"},
+            )
+            reponse.raise_for_status()
+            embedding = reponse.json()["data"][0]["embedding"]
+
+        records, _, _ = await self._graphiti.driver.execute_query(
+            """
+            MATCH (n:Entity {uuid: $uuid})
+            SET n.nom_precedent = n.name,
+                n.name = $nom,
+                n.name_embedding = $embedding,
+                n.corrige_le = datetime(),
+                n.corrige_geste = 'renommage'
+            RETURN n.uuid AS uuid
+            """,
+            uuid=uuid,
+            nom=nom,
+            embedding=embedding,
+        )
+        if not records:
+            raise CibleIntrouvable(uuid)
+
+    async def invalider_fait(self, uuid: str) -> None:
+        """Invalide un fait faux dès son origine (erreur d'extraction, pas
+        obsolescence) : `invalid_at = valid_at` (repli `created_at`). Jamais de
+        suppression physique."""
+        records, _, _ = await self._graphiti.driver.execute_query(
+            """
+            MATCH ()-[r:RELATES_TO {uuid: $uuid}]-()
+            SET r.invalid_at = coalesce(r.valid_at, r.created_at),
+                r.corrige_le = datetime(),
+                r.corrige_geste = 'invalidation'
+            RETURN r.uuid AS uuid
+            """,
+            uuid=uuid,
+        )
+        if not records:
+            raise CibleIntrouvable(uuid)
+
+    async def annuler_invalidation(self, uuid: str) -> None:
+        """Annule une invalidation manuelle (remet `invalid_at` à null et efface la
+        trace) — seulement si la trace porte `corrige_geste == 'invalidation'` :
+        les invalidations apprises par Graphiti restent intouchables."""
+        records, _, _ = await self._graphiti.driver.execute_query(
+            """
+            MATCH ()-[r:RELATES_TO {uuid: $uuid}]-()
+            RETURN r.uuid AS uuid, r.corrige_geste AS corrige_geste
+            """,
+            uuid=uuid,
+        )
+        if not records:
+            raise CibleIntrouvable(uuid)
+        if records[0]["corrige_geste"] != "invalidation":
+            raise CorrectionRefusee(uuid)
+        await self._graphiti.driver.execute_query(
+            """
+            MATCH ()-[r:RELATES_TO {uuid: $uuid}]-()
+            SET r.invalid_at = null,
+                r.corrige_le = null,
+                r.corrige_geste = null
+            """,
+            uuid=uuid,
+        )
 
     async def forget(self, entity: str) -> int:
         """Suppression réelle des nœuds dont le nom correspond, et de leurs relations."""

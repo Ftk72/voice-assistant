@@ -15,8 +15,7 @@ async def calculer_condense(graph: GraphMemory) -> CondenseGraphe:
     """Graphe complet (sans filtre de provenance) → condensé, la même tranche
     de calcul pour la route `/insight` et l'outil MCP `raconter_memoire`."""
     graphe = await graph.graphe_complet(LIMITE_GRAPHE_INSIGHT)
-    noms = [n.nom for n in graphe.noeuds]
-    noeuds = enrichir(noms, graphe.aretes)
+    noeuds = enrichir(graphe.noeuds, graphe.aretes)
     noms_communautes = nommer_communautes(noeuds)
     return condenser(noeuds, graphe.aretes, noms_communautes)
 

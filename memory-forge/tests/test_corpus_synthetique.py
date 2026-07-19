@@ -3,7 +3,9 @@ viz devra savoir rendre (ticket wayfinder 0016) — ces tests sont le contrat.""
 
 from collections import Counter, defaultdict
 
+from app.graph.ontologie import TYPES_D_ENTITES
 from scripts.corpus_synthetique import (
+    CAS_FAUTIFS,
     COMMUNAUTE_PERIPHERIQUE,
     ENTITE_TOUT_OBSOLETE,
     NOEUDS_ISOLES,
@@ -152,3 +154,42 @@ def test_les_lignes_portent_les_champs_obligatoires_de_graphiti():
 def test_preparer_lignes_est_deterministe():
     corpus = generer_corpus()
     assert preparer_lignes(corpus) == preparer_lignes(corpus)
+
+
+def test_toutes_les_entites_ont_un_type_dans_la_liste_blanche():
+    """Ticket wayfinder 0029 : le type devient un label Neo4j, réservé aux 8
+    de l'ontologie — aucune entité du corpus ne doit en sortir."""
+    _, noeuds, _ = preparer_lignes(generer_corpus())
+    assert noeuds, "le corpus doit produire des nœuds"
+    for noeud in noeuds:
+        assert noeud["type"] in TYPES_D_ENTITES
+
+
+def test_les_trois_cas_fautifs_sont_presents_avec_les_champs_obligatoires():
+    """Les 3 cas fautifs volontaires (mauvaise orthographe, mauvais type, fait
+    faux) doivent survivre à `preparer_lignes` avec les champs Graphiti
+    obligatoires (impasse 2026-07-18) pour être corrigeables depuis /viz."""
+    corpus = generer_corpus()
+    _, noeuds, aretes = preparer_lignes(corpus)
+
+    noms = {n["nom"] for n in noeuds}
+    assert CAS_FAUTIFS["entite_mal_orthographiee"] in noms
+    assert CAS_FAUTIFS["entite_mauvais_type"] in noms
+
+    par_nom = {n["nom"]: n for n in noeuds}
+    for cle in ("entite_mal_orthographiee", "entite_mauvais_type"):
+        ligne = par_nom[CAS_FAUTIFS[cle]]
+        assert ligne["type"] in TYPES_D_ENTITES
+        assert ligne["group_id"] == ""
+        assert ligne["cree"] is not None
+
+    faits_faux = [a for a in aretes if a["fait"] == CAS_FAUTIFS["fait_faux_texte"]]
+    assert len(faits_faux) == 1
+    arete = faits_faux[0]
+    assert {arete["source"], arete["target"]} == {
+        CAS_FAUTIFS["fait_faux_source"], CAS_FAUTIFS["fait_faux_cible"]
+    }
+    assert arete["group_id"] == ""
+    assert arete["cree"] is not None
+    assert arete["nom"] == "RELIE"
+    assert len(arete["episodes"]) == 1

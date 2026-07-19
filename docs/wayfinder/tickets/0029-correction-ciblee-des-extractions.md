@@ -1,7 +1,7 @@
 ---
 label: wayfinder:grilling
-statut: ouvert
-assigne:
+statut: clos
+assigne: session-2026-07-20
 bloque-par: []
 carte: carte-graphe-memoire
 ---
@@ -76,3 +76,35 @@ validation (0024).
 Les trois gestes (type, invalidation, renommage) actés au grilling et livrés
 sous test côté serveur, jugés à l'œil dans `/viz` par l'utilisateur — fusion
 et création manuelle restées dehors.
+
+## Résolution
+
+Livré et **validé à l'œil le 2026-07-20** sur la stack réelle (corpus
+synthétique réinjecté). Tout ce qui était tranché au grilling est en place :
+
+- **Plomberie du type et de l'uuid** : `NoeudGraphe` porte `uuid`/`type` +
+  trace (`corrige_le`, `corrige_geste`, `nom_precedent`, `type_precedent`),
+  `GraphEdge` porte `uuid` + trace ; `enrichir()` les préserve. Ajout par
+  rapport au grilling : l'`uuid` sur `NoeudGraphe` aussi (les routes ciblent
+  par uuid, le panneau devait avoir quoi envoyer).
+- **API** : `POST /corrections/{type,invalidation,renommage,annulation}` —
+  404 cible introuvable, 409 annulation d'une invalidation non manuelle,
+  422 type hors des 8 ; 4 méthodes sur le port `GraphMemory` (factice pour le
+  TDD + Graphiti en Cypher, liste blanche des types avant toute interpolation
+  de label). Renommage : `SET n.name` + recalcul du `name_embedding` via
+  l'embedder, textes des faits intacts. Invalidation :
+  `invalid_at = coalesce(valid_at, created_at)`, jamais de suppression.
+- **Corpus** : types posés sur toutes les entités (`TYPE_PAR_CHOSE` +
+  personnes par défaut) et 3 cas fautifs sous contrat de test (`CAS_FAUTIFS` :
+  « Aurlie Ferrand » mal orthographiée, « Rex » typé Personne, fait faux
+  les reliant).
+- **UI** : tout dans le panneau latéral (crayon ✎, sélecteur 8 types,
+  « Marquer faux », badge « corrigé à la main le… » avec l'ancienne valeur au
+  survol, « Annuler » sur les seules manuelles) ; les gestes n'apparaissent
+  que sur les nœuds porteurs d'uuid (graphe complet — une exploration ciblée
+  `/graph` n'en transporte pas). Zéro geste nouveau dans la scène 3D.
+
+21 tests ajoutés (167 au total, verts). Caveat assumé au grilling maintenu :
+la protection contre une ré-extraction est contractuelle (requêtable en un
+`WHERE corrige_le IS NOT NULL`), pas appliquée dans le pipeline Graphiti.
+Fusion de doublons et création manuelle restées dehors.

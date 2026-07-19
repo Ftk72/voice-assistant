@@ -74,15 +74,35 @@ class TestCentraliteDegre:
 
 class TestEnrichir:
     def test_enrichit_chaque_noeud_de_communaute_et_centralite(self):
-        noms = ["Léa", "Judo", "Max"]
+        noeuds_source = [
+            NoeudGraphe(nom="Léa"), NoeudGraphe(nom="Judo"), NoeudGraphe(nom="Max"),
+        ]
         aretes = [_arete("Léa", "Judo")]
 
-        noeuds = enrichir(noms, aretes)
+        noeuds = enrichir(noeuds_source, aretes)
 
         par_nom = {n.nom: n for n in noeuds}
         assert par_nom["Léa"].communaute == par_nom["Judo"].communaute
         assert par_nom["Léa"].centralite == 1.0
         assert par_nom["Max"].centralite == 0.0
+
+    def test_preserve_uuid_type_et_trace_de_correction(self):
+        """Ticket wayfinder 0029 : enrichir ne doit toucher que communauté et
+        centralité, jamais les champs de correction ciblée."""
+        noeud = NoeudGraphe(
+            nom="Léa", uuid="uuid-lea", type="Personne", corrige_geste="type",
+            nom_precedent="Lea", type_precedent="Activite",
+        )
+        aretes = [_arete("Léa", "Judo")]
+
+        noeuds = enrichir([noeud, NoeudGraphe(nom="Judo")], aretes)
+
+        par_nom = {n.nom: n for n in noeuds}
+        assert par_nom["Léa"].uuid == "uuid-lea"
+        assert par_nom["Léa"].type == "Personne"
+        assert par_nom["Léa"].corrige_geste == "type"
+        assert par_nom["Léa"].nom_precedent == "Lea"
+        assert par_nom["Léa"].type_precedent == "Activite"
 
 
 class TestNommerCommunautes:

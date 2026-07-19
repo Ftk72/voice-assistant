@@ -29,6 +29,8 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
+from app.graph.ontologie import TYPES_D_ENTITES
+
 # --- Topologie voulue (les tests s'appuient sur ces constantes) ---
 
 TAILLES_COMMUNAUTES = {
@@ -75,6 +77,96 @@ NOMS_A_RALLONGE = [
 # Toutes les arêtes de cette entité sont obsolètes — l'écho de l'expérience
 # « déménagement » (la mémoire d'avant Lyon, invalidée en bloc).
 ENTITE_TOUT_OBSOLETE = "Appartement de Lyon"
+
+# Type déterministe des « choses » (ticket wayfinder 0029) : tout ce qui n'est
+# pas explicitement listé ici est une personne (cf. `_type_de`). Choix par
+# défaut pour ce qui ne colle précisément à aucun des 8 types : `Bien`.
+TYPE_PAR_CHOSE: dict[str, str] = {
+    # Travail
+    "Projet Héliotrope": "Projet",
+    "Réunion budget": "Bien",
+    "Serveur de recette": "Bien",
+    "Openspace du 3e": "Lieu",
+    "Comité produit": "Organisation",
+    "Sprint 42": "Projet",
+    "Machine à café du couloir": "Bien",
+    # Famille
+    "Maison de Mamie Josette": "Lieu",
+    "Repas du dimanche": "Bien",
+    "Album photo 2019": "Bien",
+    "Jardin partagé": "Lieu",
+    ENTITE_TOUT_OBSOLETE: "Lieu",
+    # Musique
+    "Concert de jazz du Petit Duc": "Bien",
+    "Guitare Takamine": "Bien",
+    "Chorale du mardi": "Organisation",
+    "Vinyle de Brassens": "Bien",
+    "Studio de répétition": "Lieu",
+    # Cuisine
+    "Tajine aux abricots": "Aliment",
+    "Robot pâtissier": "Bien",
+    "Marché de la Plaine": "Lieu",
+    "Levain maison": "Aliment",
+    "Couteau santoku": "Bien",
+    # Domotique
+    "Capteur du salon": "Bien",
+    "Passerelle Zigbee": "Bien",
+    "Volet roulant est": "Bien",
+    "Scénario réveil": "Bien",
+    "Prise connectée du sapin": "Bien",
+    # Voyages
+    "Randonnée des Écrins": "Bien",
+    "Vol pour Lisbonne": "Bien",
+    "Auberge de Porto": "Lieu",
+    "Sac de 40 litres": "Bien",
+    "Carnet de voyage": "Bien",
+    # Sport
+    "Semi-marathon de Marseille": "Bien",
+    "Club d'escalade": "Organisation",
+    "Vélo gravel": "Bien",
+    "Séance du jeudi": "Bien",
+    # Jeux de rôle
+    "Campagne de l'Œil noir": "Projet",
+    "Dés fétiches": "Bien",
+    "Écran du maître de jeu": "Bien",
+    # Isolés
+    "Ticket de pressing": "Bien",
+    "Ampoule du garage": "Bien",
+    "Code du portail": "Bien",
+    "Carte de fidélité Biocoop": "Bien",
+    "Parapluie oublié": "Bien",
+    "Clé allen de 4": "Bien",
+    # Noms à rallonge
+    "Sophie-Charlotte de La Rochefoucauld-Montbéliard": "Personne",
+    "Église Saint-Jean-Baptiste-de-Belleville": "Lieu",
+    "Étagère télescopique de l'entrée côté jardin": "Bien",
+}
+
+
+def _type_de(nom: str) -> str:
+    """Type déterministe d'une entité du corpus : les « choses » suivent
+    `TYPE_PAR_CHOSE`, tout le reste (personnes du paquet, ponts) est `Personne`."""
+    return TYPE_PAR_CHOSE.get(nom, "Personne")
+
+
+# --- Cas fautifs volontaires (ticket wayfinder 0029) : matière à corriger
+# depuis /viz — jamais introduits dans la topologie normale (communautés,
+# ponts, trou structurel), pour ne perturber aucun test existant. ---
+CAS_FAUTIFS = {
+    # Entité mal orthographiée : nouvelle entité dédiée, jamais une existante.
+    "entite_mal_orthographiee": "Aurlie Ferrand",
+    # Entité au mauvais type : un animal volontairement typé Personne (reçoit
+    # `Personne` par défaut via `_type_de`, faute assumée — ne pas ajouter
+    # d'entrée `Animal` dans TYPE_PAR_CHOSE pour ce nom).
+    "entite_mauvais_type": "Rex",
+    # Fait faux : arête dédiée, contenu manifestement faux.
+    "fait_faux_source": "Aurlie Ferrand",
+    "fait_faux_cible": "Rex",
+    "fait_faux_texte": (
+        "Aurlie Ferrand a piloté un avion de chasse en solo à 8 ans, "
+        "avec Rex comme copilote"
+    ),
+}
 
 PRENOMS = [
     "Léa", "Karim", "Chantal", "Marc", "Aïcha", "Benoît", "Cécile", "David",
@@ -277,6 +369,22 @@ def generer_corpus(graine: int = 42) -> Corpus:
         for a in fabrique.aretes
     ]
 
+    # Cas fautifs volontaires (ticket wayfinder 0029) : matière à corriger
+    # depuis /viz, en dehors de la topologie testée ci-dessus.
+    corpus.noeuds_isoles.append(CAS_FAUTIFS["entite_mal_orthographiee"])
+    corpus.noeuds_isoles.append(CAS_FAUTIFS["entite_mauvais_type"])
+    fabrique.aretes.append(
+        Arete(
+            CAS_FAUTIFS["fait_faux_source"],
+            CAS_FAUTIFS["fait_faux_cible"],
+            CAS_FAUTIFS["fait_faux_texte"],
+            "conversation",
+            EPISODES_CONVERSATION[0],
+            DEBUT_DES_TEMPS,
+            None,
+        )
+    )
+
     corpus.aretes = fabrique.aretes
     return corpus
 
@@ -316,7 +424,7 @@ def preparer_lignes(corpus: Corpus) -> tuple[list[dict], list[dict], list[dict]]
     }
     lignes_noeuds = [
         {"nom": nom, "uuid": _uuid(rng), "group_id": _GROUP_ID, "cree": _CREATED_AT,
-         "resume": ""}
+         "resume": "", "type": _type_de(nom)}
         for nom in corpus.noeuds
     ]
     lignes_aretes = [
@@ -338,6 +446,12 @@ def peupler(corpus: Corpus, uri: str, utilisateur: str, mot_de_passe: str) -> di
 
     lignes_episodes, lignes_noeuds, lignes_aretes = preparer_lignes(corpus)
 
+    lignes_par_type: dict[str, list[dict]] = {}
+    for ligne in lignes_noeuds:
+        if ligne["type"] not in TYPES_D_ENTITES:
+            raise ValueError(f"type hors liste blanche : {ligne['type']!r}")
+        lignes_par_type.setdefault(ligne["type"], []).append(ligne)
+
     with GraphDatabase.driver(uri, auth=(utilisateur, mot_de_passe)) as driver:
         purger(driver)
         driver.execute_query(
@@ -354,16 +468,19 @@ def peupler(corpus: Corpus, uri: str, utilisateur: str, mot_de_passe: str) -> di
             """,
             lignes=lignes_episodes,
         )
-        driver.execute_query(
-            """
-            UNWIND $lignes AS l
-            CREATE (:Entity {uuid: l.uuid, name: l.nom,
-                             group_id: l.group_id, created_at: l.cree,
-                             summary: l.resume, labels: ['Entity'],
-                             corpus: 'synthetique'})
-            """,
-            lignes=lignes_noeuds,
-        )
+        for type_, lignes in lignes_par_type.items():
+            # Whitelist déjà vérifiée ci-dessus : seul cas où un label Cypher
+            # est interpolé directement (les labels ne sont pas paramétrables).
+            driver.execute_query(
+                f"""
+                UNWIND $lignes AS l
+                CREATE (:Entity:{type_} {{uuid: l.uuid, name: l.nom,
+                                 group_id: l.group_id, created_at: l.cree,
+                                 summary: l.resume, labels: ['Entity', l.type],
+                                 corpus: 'synthetique'}})
+                """,
+                lignes=lignes,
+            )
         driver.execute_query(
             """
             UNWIND $lignes AS l
