@@ -20,6 +20,14 @@ wayfinder « plan, don't do », comme la carte précédente) ; moteur conservé
 (3d-force-graph vendoré, `numDimensions` pour la bascule 2D) ; tout le métier
 reste dans memory-forge (`/viz`), la coquille ne fait qu'assembler.
 
+Périmètre élargi au second grilling du 2026-07-18 (« killer features », nourri
+d'une recherche SOTA LinkQ/AGENTiGraph/neuro-symbolique) : le graphe se laisse
+aussi **interroger en français sans halluciner** (réponses tirées du graphe
+réel, monologue intérieur visible), **corriger de façon ciblée** (réparer les
+extractions de Graphiti — réouverture consciente d'une part du hors-périmètre
+« édition ») et **questionner en « et si ? »** (masques contrefactuels
+éphémères).
+
 ## Notes
 
 - **Exécution incluse** : les tickets livrent le rendu, pas seulement la
@@ -92,29 +100,36 @@ reste dans memory-forge (`/viz`), la coquille ne fait qu'assembler.
 
 ## Pas encore spécifié
 
-- **Pilotage du graphe par le LLM pendant la conversation** (grilling
-  2026-07-18) : le canal de commande bidirectionnel du module dialogue A4
-  pourrait faire voler la caméra vers une entité pendant que l'assistant en
-  parle à voix haute. « Insight en français du LLM local » (clos) a fixé ce
-  que le LLM interroge aujourd'hui : le condensé (sujets/ponts/stats) via
-  `raconter_memoire` — le pilotage caméra demanderait un canal inverse
-  (MCP → coquille), à trancher avec l'adressabilité de la vue ci-dessous.
-- **Adressabilité de la vue** (URL qui capture entité/profondeur affichées,
-  même grilling) : probablement le même mécanisme technique que le pilotage
-  LLM (le canal pousserait une URL, la viz écoute `hashchange`) — à trancher
-  ensemble plutôt que deux fois.
+Brouillard trié au grilling du 2026-07-18 : quatre points ont gradué en
+tickets ([Séance de validation au réel](tickets/0024-seance-de-validation-au-reel.md),
+[Pilotage LLM et adressabilité de la vue](tickets/0025-pilotage-llm-et-adressabilite-de-la-vue.md),
+[Encodage visuel du type d'entité](tickets/0026-encodage-visuel-du-type-d-entite.md)
+— qui absorbe l'export d'image —,
+[Lecture temporelle](tickets/0027-lecture-temporelle.md)). Le second grilling
+du 2026-07-18 (killer features) a ajouté trois tickets à la frontière, jouables
+au navigateur sans attendre la séance :
+[Transparence façon LinkQ](tickets/0028-transparence-facon-linkq.md) — qui
+bloque désormais le pilotage LLM (canal partagé) ; **architecture tranchée au
+grilling du 2026-07-18** (hybride gabarits + repli Cypher libre borné, un appel
+LLM structuré, résolution d'entités serveur, exécuter puis montrer, outil MCP
+`interroger_memoire`, contrat 0025 = schéma réponse + `appliquerVue`), reste à
+livrer —,
+[Correction ciblée des extractions](tickets/0029-correction-ciblee-des-extractions.md)
+— **tranché au grilling du 2026-07-18** (plomberie du type et de l'uuid portée
+par le 0029, renommage = nom + embedding faits intacts, invalidation dès
+l'origine, trace par propriétés `corrige_*`, quatre routes
+`POST /corrections/*`, tout dans le panneau latéral, 3 cas fautifs au corpus),
+reste à livrer —
+et [Contrefactuels « et si ? »](tickets/0030-contrefactuels-et-si.md), dans cet
+ordre. Reste, derrière la
+**porte de la séance de validation** (l'expérience vécue les fera graduer ou
+disparaître) :
+
 - **Vue hiérarchique par communautés** (méga-nœuds cliquables avant les
   entités individuelles) : plus ambitieuse que la vue allégée livrée en 0017 ;
   à réévaluer une fois vécue l'expérience actuelle sur un vrai usage.
 - **Minimap** : utile si la navigation en profondeur devient courante ; le
   bouton « Graphe complet » sert déjà d'échappatoire « je suis perdu ».
-- **Encodage visuel du type d'entité** (Personne, Lieu, Organisation, Animal,
-  Bien, Activité — `ontologie.py`) : stocké en label Neo4j, jamais exposé par
-  l'API (`NoeudGraphe`) ni rendu. Mériterait un prototype dédié (quelle forme
-  pour quel type, lisibilité à l'échelle du graphe).
-- **Export d'une vue en image** (comme InfraNodus) : techniquement trivial
-  (`canvas.toDataURL()`), probablement un à-côté d'un futur ticket UI plutôt
-  qu'un ticket à part.
 - **Performance sur graphe dense** : si le corpus synthétique fait ramer le
   rendu (étiquettes sprites, effets), un chantier LOD/optimisation se
   ticketera. Option de repli notée en recherche : Cosmograph/cosmos.gl
@@ -123,19 +138,27 @@ reste dans memory-forge (`/viz`), la coquille ne fait qu'assembler.
   un changement à faire maintenant.
 - **Parité de la bascule 2D** : quels effets 3D (focus, étiquettes, caméra)
   doivent survivre en 2D, à trancher à l'usage.
-- **Lecture temporelle** (curseur sur `valid_at`/`invalid_at`, hérité des
-  « lots B1 » de la carte précédente) : à arbitrer une fois la surface belle —
-  peut devenir un ticket ou rester hors périmètre.
 - **Revalidation sur mémoire réelle** : une fois la vraie mémoire densifiée
-  par l'usage, vérifier que beauté et analyses tiennent hors synthétique.
+  par l'usage, vérifier que beauté et analyses tiennent hors synthétique —
+  déclencheur non planifiable, graduera de lui-même.
 
 ## Hors périmètre
 
 - **Analyse de texte libre façon InfraNodus** (coller un texte arbitraire pour
   le cartographier) : memory-forge visualise sa mémoire, il ne devient pas un
   outil d'analyse documentaire.
-- **Édition du graphe** au-delà de l'oubli d'entité existant (fusion de nœuds,
-  renommage, création manuelle de faits).
+- **Édition du graphe** au-delà de l'oubli d'entité et de la **correction
+  ciblée** rouverte au grilling du 2026-07-18 (type, invalidation d'un fait
+  faux, renommage — ticket
+  [Correction ciblée des extractions](tickets/0029-correction-ciblee-des-extractions.md)) :
+  la **fusion de nœuds** et la **création manuelle de faits** restent exclues.
+- **Arbre de réflexion façon Graph of Thoughts** (visualiser et élaguer les
+  hypothèses du LLM) : écarté au grilling du 2026-07-18 — la stack llama.cpp
+  ne matérialise pas ses hypothèses en graphe ; le plus loin de la valeur
+  d'usage actuelle.
+- **Outils métier du benchmark killer features** (Napkin text-to-visual,
+  Diffbot scraping, Easy Insight dashboards) : étrangers à la destination —
+  memory-forge visualise sa mémoire.
 - **Retour sonore sur les interactions du graphe** (grilling 2026-07-18,
   écarté par l'utilisateur) : le canal audio du projet est dédié à la voix de
   l'assistant (ADR 0007, host-bridge) ; des effets UI y créeraient de la
