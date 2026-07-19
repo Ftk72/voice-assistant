@@ -97,6 +97,31 @@ extractions de Graphiti — réouverture consciente d'une part du hors-périmèt
   promu à la première visite — la scène WebGL ne se paie pas au démarrage),
   CSP `frame-src` étendue à 8200. Le verrou était la CSP Tauri, pas CORS.
   Validation au réel au poste Windows encore due.
+- [Transparence façon LinkQ](tickets/0028-transparence-facon-linkq.md) —
+  **livré et validé à l'œil le 2026-07-19** sur la stack réelle : canal
+  hybride (5 gabarits Cypher + repli libre borné lecture seule), résolution
+  d'entités floue côté serveur, `POST /interroger` (rejeu d'une requête
+  éditée sans LLM), outil MCP `interroger_memoire` (sourcing « d'après N
+  faits »), section « Interroger » + monologue intérieur dans `/viz`, et
+  `appliquerVue(etat)` (surlignage + vol) — le contrat que le pilotage (0025)
+  réutilise. Les adaptateurs réels (llama.cpp, Neo4j lecture seule) ont
+  tourné au réel. Débloque le 0025 (avec la séance 0024).
+- [Correction ciblée des extractions](tickets/0029-correction-ciblee-des-extractions.md) —
+  **livré et validé à l'œil le 2026-07-20** : les trois gestes du grilling
+  (corriger le type parmi les 8 de l'ontologie, invalider un fait faux dès
+  l'origine, renommer avec recalcul d'embedding et faits intacts) plus
+  l'annulation des invalidations manuelles, via `POST /corrections/*` et le
+  panneau latéral de `/viz` ; trace `corrige_*` sur l'élément corrigé, 3 cas
+  fautifs au corpus. La plomberie type/uuid sur `NoeudGraphe`/`GraphEdge` est
+  posée — le 0026 (encodage visuel) peut s'appuyer dessus.
+- [Contrefactuels « et si ? »](tickets/0030-contrefactuels-et-si.md) —
+  **livré et validé à l'œil le 2026-07-20** (délégué sonnet) : mode « et
+  si ? » dans `/viz` — clic nœud/arête = masque éphémère (jamais écrit en
+  base), panier cumulable, `POST /et-si` en lecture seule recalcule
+  communautés/ponts/trous sur le sous-graphe, diff textuel des condensés
+  avant/après, orphelins du masque gardés en scène, retour au réel en un
+  geste. L'insight LLM n'est pas rejoué (trop lent) : diff déterministe.
+  Dernier des trois chantiers du grilling killer features.
 
 ## Pas encore spécifié
 
@@ -108,20 +133,13 @@ tickets ([Séance de validation au réel](tickets/0024-seance-de-validation-au-r
 [Lecture temporelle](tickets/0027-lecture-temporelle.md)). Le second grilling
 du 2026-07-18 (killer features) a ajouté trois tickets à la frontière, jouables
 au navigateur sans attendre la séance :
-[Transparence façon LinkQ](tickets/0028-transparence-facon-linkq.md) — qui
-bloque désormais le pilotage LLM (canal partagé) ; **architecture tranchée au
-grilling du 2026-07-18** (hybride gabarits + repli Cypher libre borné, un appel
-LLM structuré, résolution d'entités serveur, exécuter puis montrer, outil MCP
-`interroger_memoire`, contrat 0025 = schéma réponse + `appliquerVue`), reste à
-livrer —,
+[Transparence façon LinkQ](tickets/0028-transparence-facon-linkq.md) —
+**clos le 2026-07-19** (voir Décisions ci-dessus) —,
 [Correction ciblée des extractions](tickets/0029-correction-ciblee-des-extractions.md)
-— **tranché au grilling du 2026-07-18** (plomberie du type et de l'uuid portée
-par le 0029, renommage = nom + embedding faits intacts, invalidation dès
-l'origine, trace par propriétés `corrige_*`, quatre routes
-`POST /corrections/*`, tout dans le panneau latéral, 3 cas fautifs au corpus),
-reste à livrer —
-et [Contrefactuels « et si ? »](tickets/0030-contrefactuels-et-si.md), dans cet
-ordre. Reste, derrière la
+— **clos le 2026-07-20** (voir Décisions ci-dessus) —
+et [Contrefactuels « et si ? »](tickets/0030-contrefactuels-et-si.md)
+— **clos le 2026-07-20** (voir Décisions ci-dessus) —, dans cet
+ordre : les trois sont livrés. Reste, derrière la
 **porte de la séance de validation** (l'expérience vécue les fera graduer ou
 disparaître) :
 

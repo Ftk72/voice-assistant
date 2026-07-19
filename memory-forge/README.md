@@ -18,16 +18,17 @@ Configuration par variables d'environnement (préfixe `MEMORY_FORGE_`) : `BACKEN
 - `DELETE /facts?entity=…` → oubli réel (suppression, pas invalidation).
 - `GET /graph?entity=…&depth=1..3` → voisinage navigable `{center, nodes, edges}` — consommé par la page `/viz`.
 - `GET /graph/complet?limite=500&provenance=conversation|document` → le graphe entier, enrichi `{noeuds: [{nom, communaute, centralite}], aretes, tronque}` — consommé par la vue 3D de `/viz` (roadmap B1). `provenance` est optionnel (filtre les arêtes, et les nœuds qu'il isole disparaissent avec elles) ; sans limite dépassée, `tronque` vaut `false`. Les faits obsolètes (`invalid_at` non nul) sont toujours inclus, marqués — jamais omis silencieusement.
+- `POST /et-si` `{noeuds_masques: [...], faits_masques: [...]}` → contrefactuel (ticket wayfinder 0030) : masque éphémère (jamais écrit en base) d'entités/faits, recalcule communautés/centralité/condensé sur le sous-graphe obtenu — `{graphe, condense_reel, condense_masque}`, consommé par le mode « et si ? » de `/viz`.
 - `GET /viz` — page de visualisation 3D du graphe (voir plus bas).
 - `GET /viz/vendor/{fichier}` — bibliothèques JS vendorées (3d-force-graph), zéro CDN.
 - `GET /health` — healthcheck Docker.
 
 ## Architecture
 
-`app/graph/base.py` définit le port `GraphMemory` (`add_episode`, `search`, `forget`, `neighborhood`, `graphe_complet`), calqué sur les scénarios d'acceptation et non sur l'API Graphiti — l'implémentation est interchangeable sans toucher à la Filter ni au MCP.
+`app/graph/base.py` définit le port `GraphMemory` (`add_episode`, `search`, `forget`, `neighborhood`, `graphe_complet`, et les 4 corrections ciblées du ticket 0029 : `corriger_type`, `invalider_fait`, `renommer_entite`, `annuler_invalidation`), calqué sur les scénarios d'acceptation et non sur l'API Graphiti — l'implémentation est interchangeable sans toucher à la Filter ni au MCP.
 
 - `InMemoryGraph` — factice (une phrase = un fait, recherche par mots) : tests et dev.
-- `GraphitiMemory` — adaptateur réel. ⚠️ **Jamais exécuté** (écrit hors connexion) : à valider au premier lancement avec `uv sync --extra graphiti` + Neo4j.
+- `GraphitiMemory` — adaptateur réel (`uv sync --extra graphiti` + Neo4j), au réel depuis début juillet 2026 (extraction, recherche, /viz, corrections).
 
 ## Ingestion documentaire (phase 4, ADR 0006)
 

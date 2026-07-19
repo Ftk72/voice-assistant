@@ -60,6 +60,35 @@
   .trou:disabled:hover { border-color: var(--line); color: var(--muted); }
   /* Mode « ponts » (ticket 0019) : curseur de seuil et compteur dans l'en-tête. */
   #seuil-ponts { width: 80px; }
+  /* Interroger la mémoire (ticket 0028) : question, monologue, requête rejouable. */
+  #form-question { display: flex; gap: .4rem; }
+  #form-question input { flex: 1; min-width: 0; }
+  #monologue h3 { font-size: .78rem; color: var(--muted); margin: .8rem 0 .3rem; font-weight: 600; }
+  #monologue textarea { width: 100%; font: .78rem/1.4 ui-monospace, monospace; background: var(--bg);
+                        color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+                        padding: .4rem .5rem; resize: vertical; }
+  #monologue .non-resolue { color: var(--accent); }
+  #monologue pre { font-size: .75rem; overflow-x: auto; background: var(--bg);
+                   border: 1px solid var(--line); border-radius: 6px; padding: .4rem .5rem; }
+  #btn-rejouer { width: 100%; margin-top: .3rem; }
+  #reponse-question p.erreur { color: #e5534b; }
+  /* Corrections ciblées (ticket wayfinder 0029) : tout vit dans ce panneau,
+     zéro geste nouveau dans la scène 3D. */
+  .badge.corrige { background: color-mix(in srgb, var(--accent) 25%, transparent); color: var(--accent); }
+  #entite-selection .ligne-nom { display: flex; gap: .35rem; align-items: center; }
+  #entite-selection .ligne-type { color: var(--muted); font-size: .82rem; }
+  #entite-selection .crayon { padding: 0 .35rem; border: 0; background: none; color: var(--muted); }
+  #entite-selection .crayon:hover { color: var(--text); }
+  .fait .actions { margin-top: .35rem; display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+  .fait .actions button { font-size: .75rem; padding: .1rem .5rem; }
+  /* Contrefactuel « et si ? » (ticket wayfinder 0030) : puces compactes de masque. */
+  .badge.masque { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent);
+                  display: inline-flex; align-items: center; gap: .3rem; margin: 0 .35rem .35rem 0; }
+  .badge.masque button { background: none; border: 0; color: inherit; cursor: pointer; padding: 0;
+                          font-size: .95em; line-height: 1; }
+  #btn-etsi-retour { width: 100%; margin-top: .2rem; }
+  #etsi-diff { margin-top: .6rem; font-size: .82rem; }
+  #etsi-diff p { margin: .3rem 0; }
 </style>
 </head>
 <body>
@@ -86,6 +115,9 @@
     <label>seuil <input type="range" id="seuil-ponts" min="2" max="10" step="1" value="2">
       <span id="ponts-compte">≥ 2</span></label>
   </fieldset>
+  <fieldset title="Masquer des entités/faits et voir l'analyse se recalculer — éphémère, rien n'est écrit">
+    <label><input type="checkbox" id="mode-etsi"> et si ?</label>
+  </fieldset>
   <fieldset title="Dimension de la scène">
     <label><input type="checkbox" id="mode-2d"> vue 2D</label>
   </fieldset>
@@ -94,6 +126,28 @@
 <main>
   <div id="scene"></div>
   <aside>
+    <h2>Interroger</h2>
+    <form id="form-question">
+      <input id="question" placeholder="Question en français (ex. que sait-on de Léa ?)">
+      <button type="submit">Demander</button>
+    </form>
+    <div id="reponse-question"><p class="vide">Aucune question posée.</p></div>
+    <div id="monologue" hidden>
+      <h3>Monologue intérieur</h3>
+      <div id="monologue-ancrage"></div>
+      <h3>Requête (éditable, rejouable sans LLM)</h3>
+      <textarea id="requete-cypher" rows="6" spellcheck="false"></textarea>
+      <textarea id="requete-parametres" rows="2" spellcheck="false"
+                title="Paramètres de la requête (JSON)"></textarea>
+      <button type="button" id="btn-rejouer">Rejouer la requête (sans LLM)</button>
+      <details><summary>Résultats bruts</summary><pre id="resultats-bruts"></pre></details>
+    </div>
+    <div id="etsi-section" hidden>
+      <h2>Et si ?</h2>
+      <div id="etsi-masques"><p class="vide">Aucun masque : cliquer une entité ou un fait dans la scène.</p></div>
+      <button type="button" id="btn-etsi-retour" class="danger">Retour au réel</button>
+      <div id="etsi-diff"></div>
+    </div>
     <h2>Insight</h2>
     <button type="button" id="btn-insight">Raconter la mémoire</button>
     <div id="insight"><p class="vide">Aucun récit généré pour l'instant.</p></div>
@@ -161,6 +215,7 @@ const state = {
   ponts: new Set(),   // noms des entités-ponts au seuil courant (ticket 0019)
   survol: null,       // nom du nœud survolé (focus transitoire)
   verrouille: null,   // nom du nœud sur lequel le focus est épinglé (dernier clic)
+  surlignes: new Set(), // nœuds surlignés par appliquerVue (interrogation 0028, pilotage 0025)
   // Vue d'entrée allégée (grilling du 2026-07-18) : au premier chargement,
   // 264 entités d'un coup est de la soupe visuelle (la littérature UX situe
   // le confort à 20-50 nœuds). Ne restreint QUE le rendu du graphe complet —
@@ -172,6 +227,10 @@ const state = {
   // correspondent plus aux ids du condensé — garde-fou pour les puces de
   // trous structurels (ticket 0021), voir volerVersTrou().
   explorationCiblee: false,
+  // Contrefactuel « et si ? » (ticket wayfinder 0030) : panier éphémère de
+  // masques — jamais persisté, purement visuel/analytique. `faitsMasques`
+  // mémorise {uuid, texte} pour afficher des puces lisibles.
+  etSi: { actif: false, noeudsMasques: [], faitsMasques: [] },
 };
 
 // Le focus : le nœud sous la souris prime sur celui épinglé au dernier clic ;
@@ -180,7 +239,17 @@ function noeudEnFocus() { return state.survol ?? state.verrouille; }
 
 function ensembleEnFocus() {
   const centre = noeudEnFocus();
-  if (!centre) return null;
+  if (!centre) {
+    // Sans survol ni verrou, l'ensemble surligné par appliquerVue (résultats
+    // d'une interrogation) tient le focus : mêmes estompages, mêmes étiquettes.
+    if (!state.surlignes.size) return null;
+    const noeuds = new Set(state.surlignes);
+    const liens = new Set();
+    aretesVisibles().forEach((a) => {
+      if (noeuds.has(a.source) && noeuds.has(a.target)) liens.add(cle(a));
+    });
+    return { noeuds, liens };
+  }
   const noeuds = new Set([centre]);
   const liens = new Set();
   aretesVisibles().forEach((a) => {
@@ -228,8 +297,21 @@ function fusionner(noeuds, aretes) {
     if (existant) {
       existant.communaute = n.communaute;
       existant.centralite = n.centralite;
+      // uuid/type/trace (ticket 0029) : seuls les nœuds du graphe complet les
+      // portent — un voisinage (/graph) ne doit pas les effacer.
+      if (n.uuid !== undefined) {
+        Object.assign(existant, {
+          uuid: n.uuid, type: n.type, corrige_le: n.corrige_le, corrige_geste: n.corrige_geste,
+          nom_precedent: n.nom_precedent, type_precedent: n.type_precedent,
+        });
+      }
     } else {
-      state.noeuds.set(n.nom, { id: n.nom, nom: n.nom, communaute: n.communaute ?? 0, centralite: n.centralite ?? 0 });
+      state.noeuds.set(n.nom, {
+        id: n.nom, nom: n.nom, communaute: n.communaute ?? 0, centralite: n.centralite ?? 0,
+        uuid: n.uuid ?? null, type: n.type ?? null,
+        corrige_le: n.corrige_le ?? null, corrige_geste: n.corrige_geste ?? null,
+        nom_precedent: n.nom_precedent ?? null, type_precedent: n.type_precedent ?? null,
+      });
     }
   }
   const connues = new Set(state.aretes.map(cle));
@@ -266,6 +348,12 @@ function calculerPonts() {
 // plutôt que d'afficher des ponts faux.
 function modePontsActif() {
   return document.getElementById("mode-ponts").checked && state.ponts.size > 0;
+}
+
+// Contrefactuel « et si ? » (ticket wayfinder 0030) : en mode actif, les
+// clics dans la scène servent au masquage plutôt qu'à l'exploration.
+function etSiActif() {
+  return state.etSi.actif;
 }
 
 function valeurNoeud(n) {
@@ -381,8 +469,10 @@ function rafraichir() {
   const masquerObsoletes = document.getElementById("obsoletes-masques").checked;
   let aretes = aretesVisibles().filter((a) => !(masquerObsoletes && a.invalid_at !== null));
   const relies = new Set(aretes.flatMap((a) => [a.source, a.target]));
+  // En mode « et si ? » (ticket 0030), les entités isolées par un masque
+  // restent en scène : les orphelins font partie de ce qu'on veut voir.
   let noeuds = [...state.noeuds.values()].filter(
-    (n) => relies.has(n.nom) || n.nom === state.centre || state.noeuds.size <= 1
+    (n) => relies.has(n.nom) || n.nom === state.centre || state.noeuds.size <= 1 || etSiActif()
   );
   if (state.vueAllegee) {
     const dominants = new Set(
@@ -404,11 +494,32 @@ function rafraichir() {
     // champs mutés, d'où cet identifiant figé à la construction.
     links: aretes.map((a) => ({
       id: cle(a), source: a.source, target: a.target, texte: a.text,
-      provenance: a.provenance, obsolete: a.invalid_at !== null,
+      provenance: a.provenance, obsolete: a.invalid_at !== null, uuid: a.uuid ?? null,
     })),
   };
   graphe.graphData(donnees);
   nettoyerEtiquettes();
+}
+
+// Les 8 types de l'ontologie (app/graph/ontologie.py) : valeur = label Neo4j
+// ASCII, libellé accentué pour l'affichage.
+const TYPES_ONTOLOGIE = {
+  Activite: "Activité", Personne: "Personne", Lieu: "Lieu", Organisation: "Organisation",
+  Animal: "Animal", Bien: "Bien", Projet: "Projet", Aliment: "Aliment",
+};
+
+function badgeCorrige(objet) {
+  const badge = document.createElement("span");
+  badge.className = "badge corrige";
+  badge.textContent = objet.corrige_le
+    ? `corrigé à la main le ${new Date(objet.corrige_le).toLocaleDateString("fr-FR")}`
+    : "corrigé à la main";
+  const precedents = [
+    objet.nom_precedent ? `ancien nom : ${objet.nom_precedent}` : null,
+    objet.type_precedent ? `ancien type : ${objet.type_precedent}` : null,
+  ].filter(Boolean).join(" · ");
+  if (precedents) badge.title = precedents;
+  return badge;
 }
 
 function selectionner(nom) {
@@ -416,14 +527,101 @@ function selectionner(nom) {
   const noeud = state.noeuds.get(nom);
   const zone = document.getElementById("entite-selection");
   if (!noeud) { zone.innerHTML = '<p class="vide">Entité inconnue.</p>'; return; }
+  // Corrections ciblées (ticket 0029) : l'uuid n'arrive que par le graphe
+  // complet — un nœud venu d'une exploration ciblée (/graph) n'en a pas, ses
+  // gestes de correction restent masqués (recharger le graphe complet suffit).
+  const corrigible = Boolean(noeud.uuid);
   zone.innerHTML = `
-    <span class="nom"></span>
+    <span class="ligne-nom"><span class="nom"></span></span>
     <span class="meta">Centralité : ${(noeud.centralite ?? 0).toFixed(2)} · communauté ${noeud.communaute ?? 0}</span>
     <button type="button" class="danger" id="btn-oublier">Oublier cette entité</button>
   `;
   zone.querySelector(".nom").textContent = noeud.nom;
+  if (noeud.corrige_le) zone.querySelector(".ligne-nom").after(badgeCorrige(noeud));
+  if (corrigible) {
+    const crayon = document.createElement("button");
+    crayon.type = "button";
+    crayon.className = "crayon";
+    crayon.textContent = "✎";
+    crayon.title = "Renommer (correction d'une faute d'orthographe d'extraction)";
+    crayon.addEventListener("click", () => renommer(noeud));
+    zone.querySelector(".ligne-nom").append(crayon);
+
+    const ligne = document.createElement("label");
+    ligne.className = "ligne-type";
+    ligne.append("type ");
+    const select = document.createElement("select");
+    const vide = new Option("(sans type)", "");
+    vide.disabled = true;
+    select.append(vide);
+    for (const [valeur, libelle] of Object.entries(TYPES_ONTOLOGIE)) {
+      select.append(new Option(libelle, valeur));
+    }
+    select.value = noeud.type ?? "";
+    select.title = "Corriger le type extrait (les 8 types de l'ontologie)";
+    select.addEventListener("change", () => corrigerTypeEntite(noeud, select.value));
+    ligne.append(select);
+    document.getElementById("btn-oublier").before(ligne);
+  } else if (noeud.type) {
+    const ligne = document.createElement("span");
+    ligne.className = "meta";
+    ligne.textContent = `Type : ${TYPES_ONTOLOGIE[noeud.type] ?? noeud.type}`;
+    document.getElementById("btn-oublier").before(ligne);
+  }
   document.getElementById("btn-oublier").addEventListener("click", () => oublier(noeud.nom));
   afficherFaits(nom);
+}
+
+// --- Corrections ciblées (ticket wayfinder 0029) : type, renommage,
+// invalidation d'un fait faux, annulation d'une invalidation manuelle.
+// Jamais de suppression physique ; après chaque geste, rechargement du graphe
+// complet — l'état client ne devine rien, le serveur fait foi. ---
+
+async function corriger(geste, corps) {
+  const res = await fetch(`/corrections/${geste}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(corps),
+  });
+  if (!res.ok) {
+    const detail = (await res.json().catch(() => null))?.detail;
+    setStatus(`Correction refusée (${res.status})${typeof detail === "string" ? ` : ${detail}` : ""}`);
+    return false;
+  }
+  return true;
+}
+
+async function rechargerEtReselectionner(nom) {
+  await chargerGrapheComplet();
+  if (state.noeuds.has(nom)) selectionner(nom);
+}
+
+async function corrigerTypeEntite(noeud, type) {
+  if (!type || type === noeud.type) return;
+  if (!(await corriger("type", { uuid: noeud.uuid, type }))) { selectionner(noeud.nom); return; }
+  setStatus(`Type de « ${noeud.nom} » corrigé : ${TYPES_ONTOLOGIE[type]}.`);
+  await rechargerEtReselectionner(noeud.nom);
+}
+
+async function renommer(noeud) {
+  const saisie = prompt(`Corriger l'orthographe de « ${noeud.nom} » :`, noeud.nom);
+  const nouveau = saisie?.trim();
+  if (!nouveau || nouveau === noeud.nom) return;
+  if (!(await corriger("renommage", { uuid: noeud.uuid, nom: nouveau }))) return;
+  setStatus(`« ${noeud.nom} » renommée en « ${nouveau} » — les textes des faits restent intacts.`);
+  await rechargerEtReselectionner(nouveau);
+}
+
+async function marquerFaux(arete, entite) {
+  if (!(await corriger("invalidation", { uuid: arete.uuid }))) return;
+  setStatus("Fait marqué faux : invalidé dès l'origine, jamais supprimé.");
+  await rechargerEtReselectionner(entite);
+}
+
+async function annulerInvalidation(arete, entite) {
+  if (!(await corriger("annulation", { uuid: arete.uuid }))) return;
+  setStatus("Invalidation manuelle annulée : le fait redevient actif.");
+  await rechargerEtReselectionner(entite);
 }
 
 async function oublier(entite) {
@@ -456,6 +654,30 @@ function afficherFaits(entite) {
     div.children[0].textContent = a.text;
     div.querySelector(".badge").textContent = a.provenance.source === "conversation" ? "conversation" : "document";
     div.querySelector(".meta span:last-child").textContent = [a.provenance.name, dates].filter(Boolean).join(" · ");
+    // Corrections ciblées (ticket 0029) : « marquer faux » sur un fait actif,
+    // « annuler » sur les seules invalidations manuelles (la trace les
+    // distingue) — celles apprises par Graphiti restent intouchables.
+    if (a.uuid) {
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      if (a.corrige_geste === "invalidation") {
+        const bouton = document.createElement("button");
+        bouton.type = "button";
+        bouton.textContent = "Annuler";
+        bouton.title = "Annuler cette invalidation manuelle : le fait redevient actif";
+        bouton.addEventListener("click", () => annulerInvalidation(a, entite));
+        actions.append(badgeCorrige(a), bouton);
+      } else if (a.invalid_at === null) {
+        const bouton = document.createElement("button");
+        bouton.type = "button";
+        bouton.className = "danger";
+        bouton.textContent = "Marquer faux";
+        bouton.title = "Erreur d'extraction : invalide le fait dès l'origine, sans le supprimer";
+        bouton.addEventListener("click", () => marquerFaux(a, entite));
+        actions.append(bouton);
+      }
+      if (actions.childElementCount) div.append(actions);
+    }
     zone.append(div);
   }
 }
@@ -656,11 +878,17 @@ const graphe = ForceGraph3D()(document.getElementById("scene"))
   .linkDirectionalParticleSpeed(0.004)
   .linkLabel((l) => l.texte)
   .onNodeClick((n) => {
+    if (etSiActif()) { ajouterMasqueNoeud(n.nom); return; }
     volerVers(n);
     state.verrouille = n.nom;
     rafraichirSurlignage();
     rafraichirEtiquettes();
     explorer(n.nom, { fusion: true });
+  })
+  .onLinkClick((l) => {
+    if (!etSiActif()) return;
+    if (!l.uuid) { setStatus("Ce fait ne porte pas d'uuid : il ne peut pas être masqué."); return; }
+    ajouterMasqueFait(l.uuid, l.texte);
   })
   .onNodeHover((n) => {
     document.getElementById("scene").style.cursor = n ? "pointer" : null;
@@ -671,8 +899,9 @@ const graphe = ForceGraph3D()(document.getElementById("scene"))
     rafraichirEtiquettes();
   })
   .onBackgroundClick(() => {
-    if (!state.verrouille) return;
+    if (!state.verrouille && !state.surlignes.size) return;
     state.verrouille = null;
+    state.surlignes.clear();
     rafraichirSurlignage();
     rafraichirEtiquettes();
   });
@@ -750,6 +979,162 @@ document.getElementById("seuil-ponts").addEventListener("input", () => {
   rafraichirModePonts();
 });
 
+// --- Contrefactuel « et si ? » (ticket wayfinder 0030) : masquer une entité ou
+// un fait et voir l'analyse (communautés, ponts, trous) se recalculer, sans
+// jamais rien écrire en base — panier éphémère, purement client. ---
+
+async function rejouerEtSi() {
+  setStatus("Recalcul « et si ? »…");
+  const res = await fetch("/et-si", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      noeuds_masques: state.etSi.noeudsMasques,
+      faits_masques: state.etSi.faitsMasques.map((f) => f.uuid),
+    }),
+  });
+  if (!res.ok) { setStatus(`Erreur ${res.status}`); return; }
+  const data = await res.json();
+  state.noeuds.clear();
+  state.aretes = [];
+  state.centre = null;
+  state.vueAllegee = false;
+  state.explorationCiblee = false;
+  fusionner(data.graphe.noeuds, data.graphe.aretes);
+  state.nomsCommunautes = new Map(
+    Object.entries(data.graphe.noms_communautes ?? {}).map(([cle, nom]) => [Number(cle), nom])
+  );
+  calculerPonts();
+  rafraichir();
+  rafraichirLegende();
+  rafraichirPanneauEtSi();
+  afficherDiffEtSi(data.condense_reel, data.condense_masque, data.graphe);
+  const total = `${state.noeuds.size} entités, ${state.aretes.length} faits`;
+  setStatus(`Contrefactuel « et si ? » : ${total} (${state.etSi.noeudsMasques.length} entité(s) et `
+    + `${state.etSi.faitsMasques.length} fait(s) masqué(s)).`);
+}
+
+function ajouterMasqueNoeud(nom) {
+  if (state.etSi.noeudsMasques.includes(nom)) return;
+  state.etSi.noeudsMasques.push(nom);
+  rafraichirPanneauEtSi();
+  rejouerEtSi();
+}
+
+function retirerMasqueNoeud(nom) {
+  state.etSi.noeudsMasques = state.etSi.noeudsMasques.filter((n) => n !== nom);
+  rafraichirPanneauEtSi();
+  rejouerEtSi();
+}
+
+function ajouterMasqueFait(uuid, texte) {
+  if (state.etSi.faitsMasques.some((f) => f.uuid === uuid)) return;
+  state.etSi.faitsMasques.push({ uuid, texte });
+  rafraichirPanneauEtSi();
+  rejouerEtSi();
+}
+
+function retirerMasqueFait(uuid) {
+  state.etSi.faitsMasques = state.etSi.faitsMasques.filter((f) => f.uuid !== uuid);
+  rafraichirPanneauEtSi();
+  rejouerEtSi();
+}
+
+function rafraichirPanneauEtSi() {
+  const zone = document.getElementById("etsi-masques");
+  if (!state.etSi.noeudsMasques.length && !state.etSi.faitsMasques.length) {
+    zone.innerHTML = '<p class="vide">Aucun masque : cliquer une entité ou un fait dans la scène.</p>';
+    return;
+  }
+  zone.replaceChildren();
+  for (const nom of state.etSi.noeudsMasques) {
+    const puce = document.createElement("span");
+    puce.className = "badge masque";
+    puce.append(nom);
+    const bouton = document.createElement("button");
+    bouton.type = "button";
+    bouton.textContent = "✕";
+    bouton.title = `Retirer le masque sur « ${nom} »`;
+    bouton.addEventListener("click", () => retirerMasqueNoeud(nom));
+    puce.append(bouton);
+    zone.append(puce);
+  }
+  for (const fait of state.etSi.faitsMasques) {
+    const puce = document.createElement("span");
+    puce.className = "badge masque";
+    puce.append(fait.texte);
+    const bouton = document.createElement("button");
+    bouton.type = "button";
+    bouton.textContent = "✕";
+    bouton.title = "Retirer le masque sur ce fait";
+    bouton.addEventListener("click", () => retirerMasqueFait(fait.uuid));
+    puce.append(bouton);
+    zone.append(puce);
+  }
+}
+
+// Diff déterministe entre le condensé réel et le condensé masqué — rien
+// n'est affiché pour une catégorie inchangée/vide (pas de bruit visuel).
+function afficherDiffEtSi(condenseReel, condenseMasque, grapheMasque) {
+  const zone = document.getElementById("etsi-diff");
+  zone.replaceChildren();
+  const ligne = (texte) => { const p = document.createElement("p"); p.textContent = texte; zone.append(p); };
+
+  ligne(`Sujets : ${condenseReel.sujets.length} → ${condenseMasque.sujets.length}`);
+
+  const pontsDisparus = condenseReel.ponts.filter((p) => !condenseMasque.ponts.includes(p));
+  const pontsApparus = condenseMasque.ponts.filter((p) => !condenseReel.ponts.includes(p));
+  if (pontsDisparus.length) ligne(`Ponts disparus : ${pontsDisparus.join(", ")}`);
+  if (pontsApparus.length) ligne(`Ponts apparus : ${pontsApparus.join(", ")}`);
+
+  const cleTrou = (t) => `${t.sujet_a}↔${t.sujet_b}`;
+  const clesReel = new Set(condenseReel.trous.map(cleTrou));
+  const clesMasque = new Set(condenseMasque.trous.map(cleTrou));
+  const trousDisparus = condenseReel.trous.filter((t) => !clesMasque.has(cleTrou(t)));
+  const trousApparus = condenseMasque.trous.filter((t) => !clesReel.has(cleTrou(t)));
+  if (trousDisparus.length) {
+    ligne(`Trous disparus : ${trousDisparus.map((t) => `${t.sujet_a} ↔ ${t.sujet_b}`).join(", ")}`);
+  }
+  if (trousApparus.length) {
+    ligne(`Trous apparus : ${trousApparus.map((t) => `${t.sujet_a} ↔ ${t.sujet_b}`).join(", ")}`);
+  }
+
+  const relies = new Set(grapheMasque.aretes.flatMap((a) => [a.source, a.target]));
+  const isolees = grapheMasque.noeuds.filter((n) => !relies.has(n.nom)).length;
+  if (isolees > 0) ligne(`${isolees} entité(s) isolée(s) par le masque.`);
+}
+
+async function entrerModeEtSi() {
+  state.etSi.actif = true;
+  state.etSi.noeudsMasques = [];
+  state.etSi.faitsMasques = [];
+  document.getElementById("etsi-section").hidden = false;
+  document.getElementById("btn-insight").disabled = true;
+  document.getElementById("btn-insight").title = "L'insight raconte le graphe réel — sortir du mode et si";
+  rafraichirPanneauEtSi();
+  await rejouerEtSi();
+}
+
+async function sortirModeEtSi() {
+  state.etSi.actif = false;
+  state.etSi.noeudsMasques = [];
+  state.etSi.faitsMasques = [];
+  document.getElementById("etsi-section").hidden = true;
+  document.getElementById("btn-insight").disabled = false;
+  document.getElementById("btn-insight").title = "";
+  await chargerGrapheComplet();
+}
+
+document.getElementById("mode-etsi").addEventListener("change", (e) => {
+  if (e.target.checked) entrerModeEtSi(); else sortirModeEtSi();
+});
+document.getElementById("btn-etsi-retour").addEventListener("click", () => {
+  state.etSi.noeudsMasques = [];
+  state.etSi.faitsMasques = [];
+  rafraichirPanneauEtSi();
+  rejouerEtSi();
+});
+
 
 // --- Panneau Insight (ticket wayfinder 0020) : récit du graphe par le LLM local ---
 document.getElementById("btn-insight").addEventListener("click", async () => {
@@ -772,6 +1157,106 @@ document.getElementById("btn-insight").addEventListener("click", async () => {
   } finally {
     bouton.disabled = false;
   }
+});
+
+// --- Interroger la mémoire (ticket wayfinder 0028, façon LinkQ) ---
+// Contexte léger côté appelant : la réponse précédente le fournit, on le
+// renvoie tel quel avec la question suivante (le service reste sans état).
+let contexteInterrogation = null;
+
+// Contrat partagé avec le pilotage LLM (ticket 0025) : LA fonction unique qui
+// applique un état de vue — surlignage de l'ensemble cité + vol de caméra
+// vers le focus, via la mécanique existante (ensembleEnFocus/volerVers).
+function appliquerVue(etat) {
+  state.surlignes = new Set(etat?.surligner ?? []);
+  state.verrouille = null;
+  if (etat?.focus) {
+    const noeud = graphe.graphData().nodes.find((n) => n.nom === etat.focus);
+    if (noeud) { volerVers(noeud); state.verrouille = etat.focus; }
+  }
+  rafraichirSurlignage();
+  rafraichirEtiquettes();
+}
+window.appliquerVue = appliquerVue;
+
+function afficherMonologue(monologue) {
+  const zone = document.getElementById("monologue");
+  zone.hidden = false;
+  const ancrage = document.getElementById("monologue-ancrage");
+  ancrage.replaceChildren();
+  for (const r of monologue.resolues ?? []) {
+    const p = document.createElement("p");
+    p.textContent = `Entité reconnue : « ${r.mention} » → ${r.noeud}`;
+    ancrage.append(p);
+  }
+  for (const mention of monologue.non_resolues ?? []) {
+    const p = document.createElement("p");
+    p.className = "non-resolue";
+    p.textContent = `Mention non résolue (écartée de la requête) : « ${mention} »`;
+    ancrage.append(p);
+  }
+  if (monologue.aiguillage?.gabarit) {
+    const p = document.createElement("p");
+    p.textContent = `Gabarit choisi : ${monologue.aiguillage.gabarit}`;
+    ancrage.append(p);
+  } else if (monologue.aiguillage?.cypher) {
+    const p = document.createElement("p");
+    p.textContent = "Repli Cypher libre (aucun gabarit ne collait).";
+    ancrage.append(p);
+  }
+  document.getElementById("requete-cypher").value = monologue.requete?.cypher ?? "";
+  document.getElementById("requete-parametres").value =
+    JSON.stringify(monologue.requete?.parametres ?? {});
+  document.getElementById("resultats-bruts").textContent =
+    JSON.stringify(monologue.resultats ?? [], null, 2);
+}
+
+async function envoyerInterrogation(corps) {
+  const zone = document.getElementById("reponse-question");
+  zone.innerHTML = '<p class="vide">Interrogation en cours — ~18 s avec le LLM, davantage au premier appel…</p>';
+  try {
+    const res = await fetch("/interroger", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(corps),
+    });
+    if (!res.ok) {
+      const detail = (await res.json().catch(() => null))?.detail;
+      throw new Error(detail ?? `Erreur ${res.status}`);
+    }
+    const data = await res.json();
+    zone.replaceChildren();
+    const p = document.createElement("p");
+    p.textContent = data.reponse
+      ?? `Requête rejouée : ${data.monologue.resultats.length} résultat(s) — voir les résultats bruts.`;
+    zone.append(p);
+    afficherMonologue(data.monologue);
+    if (corps.question) contexteInterrogation = data.contexte;
+    appliquerVue(data.vue);
+  } catch (e) {
+    zone.innerHTML = '<p class="vide erreur"></p>';
+    zone.querySelector("p").textContent = `Échec de l'interrogation : ${e.message}`;
+  }
+}
+
+document.getElementById("form-question").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const question = document.getElementById("question").value.trim();
+  if (question) envoyerInterrogation({ question, contexte: contexteInterrogation });
+});
+
+document.getElementById("btn-rejouer").addEventListener("click", () => {
+  const cypher = document.getElementById("requete-cypher").value.trim();
+  if (!cypher) return;
+  let parametres = {};
+  try {
+    parametres = JSON.parse(document.getElementById("requete-parametres").value || "{}");
+  } catch {
+    document.getElementById("reponse-question").innerHTML =
+      '<p class="vide erreur">Paramètres : JSON invalide.</p>';
+    return;
+  }
+  envoyerInterrogation({ requete: { cypher, parametres } });
 });
 
 chargerGrapheComplet({ allege: true });

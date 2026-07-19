@@ -4,9 +4,27 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
+from app.graph.base import CibleIntrouvable, CorrectionRefusee
 from app.insight import raconter
-from app.schemas import EpisodeIn, GrapheComplet, GraphNeighborhood, InsightReponse, SearchResponse
-from app.viz.analyse import enrichir, nommer_communautes
+from app.interrogation import interroger
+from app.interrogation.garde_fous import RequeteInterdite
+from app.schemas import (
+    CorrectionCibleIn,
+    CorrectionRenommageIn,
+    CorrectionTypeIn,
+    EpisodeIn,
+    EtSiIn,
+    EtSiReponse,
+    GrapheComplet,
+    GraphNeighborhood,
+    InsightReponse,
+    InterrogationIn,
+    InterrogationReponse,
+    SearchResponse,
+)
+from app.viz.analyse import condenser, enrichir, masquer, nommer_communautes
+
+LIMITE_GRAPHE_ET_SI = 500
 
 VIZ_PAGE = Path(__file__).resolve().parent.parent / "viz" / "index.html"
 VENDOR_DIR = Path(__file__).resolve().parent.parent / "viz" / "vendor"
@@ -71,15 +89,48 @@ async def graphe_complet(
     `provenance` filtre les arêtes ; les nœuds qu'elle isole disparaissent avec elles."""
     graphe = await request.app.state.graph.graphe_complet(limite)
     aretes = graphe.aretes
-    noms = [n.nom for n in graphe.noeuds]
+    noeuds_source = graphe.noeuds
     if provenance is not None:
         aretes = [a for a in aretes if a.provenance.source == provenance]
         relies = {a.source for a in aretes} | {a.target for a in aretes}
-        noms = [n for n in noms if n in relies]
-    noeuds = enrichir(noms, aretes)
+        noeuds_source = [n for n in noeuds_source if n.nom in relies]
+    noeuds = enrichir(noeuds_source, aretes)
     noms_communautes = nommer_communautes(noeuds)
     return GrapheComplet(
         noeuds=noeuds, aretes=aretes, tronque=graphe.tronque, noms_communautes=noms_communautes
+    )
+
+
+@router.post("/et-si", response_model=EtSiReponse)
+async def et_si(panier: EtSiIn, request: Request) -> EtSiReponse:
+    """Contrefactuel « et si ? » (ticket wayfinder 0030) : masque des entités et
+    des faits (panier éphémère, jamais persisté — aucune écriture dans le
+    graphe) et recalcule communautés/centralité/condensé sur le sous-graphe
+    obtenu, pour comparer à l'analyse réelle. Même tranche que `/insight`
+    (500 nœuds les plus connectés) ; l'insight LLM n'est pas rejoué ici — trop
+    lent pour un geste interactif, le diff déterministe des condensés suffit."""
+    graphe = await request.app.state.graph.graphe_complet(LIMITE_GRAPHE_ET_SI)
+
+    noeuds_reels = enrichir(graphe.noeuds, graphe.aretes)
+    noms_communautes_reel = nommer_communautes(noeuds_reels)
+    condense_reel = condenser(noeuds_reels, graphe.aretes, noms_communautes_reel)
+
+    noeuds_masques, aretes_masquees = masquer(
+        graphe.noeuds, graphe.aretes, panier.noeuds_masques, panier.faits_masques
+    )
+    noeuds_enrichis = enrichir(noeuds_masques, aretes_masquees)
+    noms_communautes_masque = nommer_communautes(noeuds_enrichis)
+    condense_masque = condenser(noeuds_enrichis, aretes_masquees, noms_communautes_masque)
+
+    return EtSiReponse(
+        graphe=GrapheComplet(
+            noeuds=noeuds_enrichis,
+            aretes=aretes_masquees,
+            tronque=graphe.tronque,
+            noms_communautes=noms_communautes_masque,
+        ),
+        condense_reel=condense_reel,
+        condense_masque=condense_masque,
     )
 
 
@@ -92,7 +143,72 @@ async def insight(request: Request) -> InsightReponse:
     return await raconter(request.app.state.graph, request.app.state.insight)
 
 
+@router.post("/interroger", response_model=InterrogationReponse)
+async def interroger_route(demande: InterrogationIn, request: Request) -> InterrogationReponse:
+    """Interroger la mémoire sans halluciner (ticket wayfinder 0028, modèle
+    LinkQ) : question française → requête visible et exécutée sur le graphe →
+    réponse sourcée + monologue intérieur + état de vue pour /viz. Avec
+    `requete` au lieu de `question` : rejeu direct, sans LLM."""
+    try:
+        return await interroger(
+            request.app.state.graph,
+            request.app.state.traducteur,
+            request.app.state.executeur,
+            demande,
+        )
+    except RequeteInterdite as erreur:
+        raise HTTPException(status_code=400, detail=str(erreur)) from erreur
+
+
 @router.delete("/facts")
 async def forget(entity: str, request: Request) -> dict[str, int]:
     """Oubli : suppression réelle (distincte de l'obsolescence, cf. CONTEXT.md)."""
     return {"forgotten": await request.app.state.graph.forget(entity)}
+
+
+@router.post("/corrections/type")
+async def corriger_type(corps: CorrectionTypeIn, request: Request) -> dict[str, str]:
+    """Corrige le type d'une entité mal extraite (ticket wayfinder 0029) —
+    correction ciblée depuis /viz, pas un éditeur de graphe : le type doit être
+    l'un des 8 de l'ontologie (validé côté schéma)."""
+    try:
+        await request.app.state.graph.corriger_type(corps.uuid, corps.type)
+    except CibleIntrouvable as erreur:
+        raise HTTPException(status_code=404, detail=str(erreur)) from erreur
+    return {"status": "ok"}
+
+
+@router.post("/corrections/invalidation")
+async def invalider_fait(corps: CorrectionCibleIn, request: Request) -> dict[str, str]:
+    """Invalide un fait faux dès son origine (erreur d'extraction, pas
+    obsolescence) — jamais de suppression physique (ticket wayfinder 0029)."""
+    try:
+        await request.app.state.graph.invalider_fait(corps.uuid)
+    except CibleIntrouvable as erreur:
+        raise HTTPException(status_code=404, detail=str(erreur)) from erreur
+    return {"status": "ok"}
+
+
+@router.post("/corrections/renommage")
+async def renommer_entite(corps: CorrectionRenommageIn, request: Request) -> dict[str, str]:
+    """Renomme une entité mal orthographiée (ticket wayfinder 0029) ; les textes
+    des faits déjà extraits restent intacts (citations historiques) — pas de
+    fusion de doublons, hors périmètre."""
+    try:
+        await request.app.state.graph.renommer_entite(corps.uuid, corps.nom)
+    except CibleIntrouvable as erreur:
+        raise HTTPException(status_code=404, detail=str(erreur)) from erreur
+    return {"status": "ok"}
+
+
+@router.post("/corrections/annulation")
+async def annuler_invalidation(corps: CorrectionCibleIn, request: Request) -> dict[str, str]:
+    """Annule une invalidation manuelle (geste de correction) — jamais une
+    invalidation apprise par Graphiti, intouchable (ticket wayfinder 0029)."""
+    try:
+        await request.app.state.graph.annuler_invalidation(corps.uuid)
+    except CibleIntrouvable as erreur:
+        raise HTTPException(status_code=404, detail=str(erreur)) from erreur
+    except CorrectionRefusee as erreur:
+        raise HTTPException(status_code=409, detail=str(erreur)) from erreur
+    return {"status": "ok"}

@@ -92,15 +92,17 @@ def nommer_communautes(noeuds: list[NoeudGraphe]) -> dict[int, str]:
     }
 
 
-def enrichir(noms: list[str], aretes: list[GraphEdge]) -> list[NoeudGraphe]:
-    """Construit les `NoeudGraphe` (communauté + centralité) pour la liste de noms
-    fournie, à partir des arêtes du graphe complet."""
+def enrichir(noeuds: list[NoeudGraphe], aretes: list[GraphEdge]) -> list[NoeudGraphe]:
+    """Enrichit (communauté + centralité) les `NoeudGraphe` fournis, à partir des
+    arêtes du graphe complet — préserve les autres champs (uuid, type, trace de
+    correction, ticket wayfinder 0029), seuls `communaute`/`centralite` changent."""
+    noms = [n.nom for n in noeuds]
     paires = [(arete.source, arete.target) for arete in aretes]
     communautes = detecter_communautes(noms, paires)
     centralites = centralite_degre(noms, paires)
     return [
-        NoeudGraphe(nom=nom, communaute=communautes[nom], centralite=centralites[nom])
-        for nom in noms
+        n.model_copy(update={"communaute": communautes[n.nom], "centralite": centralites[n.nom]})
+        for n in noeuds
     ]
 
 
@@ -185,6 +187,34 @@ def detecter_trous(
         key=lambda t: (-(tailles[t.communaute_a] * tailles[t.communaute_b]), t.sujet_a, t.sujet_b)
     )
     return trous[:_MAX_TROUS]
+
+
+def masquer(
+    noeuds: list[NoeudGraphe],
+    aretes: list[GraphEdge],
+    noeuds_masques: list[str],
+    faits_masques: list[str],
+) -> tuple[list[NoeudGraphe], list[GraphEdge]]:
+    """Contrefactuel « et si ? » (ticket wayfinder 0030) : masque visuellement des
+    entités et des faits pour observer l'analyse se recalculer sans rien
+    persister — le masque est éphémère, jamais écrit en base.
+
+    Retire les nœuds dont le nom figure dans `noeuds_masques` et **toutes leurs
+    arêtes incidentes** (source ou target), ainsi que les arêtes dont l'uuid
+    figure dans `faits_masques`. Un voisin qu'un masque isole (plus aucune
+    arête) reste présent dans le graphe rendu — seuls les nœuds explicitement
+    masqués disparaissent, les orphelins font partie de ce qu'on veut voir."""
+    noms_masques = set(noeuds_masques)
+    uuids_masques = set(faits_masques)
+    noeuds_retenus = [n for n in noeuds if n.nom not in noms_masques]
+    aretes_retenues = [
+        a
+        for a in aretes
+        if a.source not in noms_masques
+        and a.target not in noms_masques
+        and a.uuid not in uuids_masques
+    ]
+    return noeuds_retenus, aretes_retenues
 
 
 def condenser(
