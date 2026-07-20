@@ -9,6 +9,8 @@
     --bg: #0e1013; --panel: #1a1d23; --line: #2e333b;
     --text: #e8e9eb; --muted: #9aa0a8;
     --souvenir: #6ea8fe; --document: #74c69d; --obsolete: #6c757d; --accent: #f0a63a;
+    /* Lecture temporelle (ticket 0027) — tenir en phase avec lectureTemporelle.js */
+    --futur: #3a4150; --revolu: #b5533c;
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 14px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--text); }
@@ -34,6 +36,13 @@
   aside h2:first-child { margin-top: 0; }
   .fait { border: 1px solid var(--line); border-radius: 8px; padding: .5rem .65rem; margin-bottom: .5rem; }
   .fait.obsolete { opacity: .5; }
+  /* Lecture temporelle (ticket 0027) : mêmes teintes que les liens de la scène,
+     pour qu'on apprenne la couleur en lisant le mot. */
+  .badge.revolu { background: color-mix(in srgb, var(--revolu) 25%, transparent); color: var(--revolu); }
+  .badge.futur { background: color-mix(in srgb, var(--futur) 40%, transparent); color: var(--text); }
+  /* Lecture temporelle (ticket wayfinder 0027) : curseur « à cette date ». */
+  #curseur-temporel { width: 130px; }
+  #date-curseur { color: var(--muted); white-space: nowrap; }
   .fait .meta { color: var(--muted); font-size: .78rem; margin-top: .25rem; }
   .badge { display: inline-block; padding: 0 .45rem; border-radius: 999px; font-size: .72rem; }
   .badge.conversation { background: color-mix(in srgb, var(--souvenir) 25%, transparent); color: var(--souvenir); }
@@ -51,6 +60,14 @@
                 padding: .4rem .65rem; margin-bottom: .4rem; background: var(--bg); color: var(--text); }
   .communaute:hover { border-color: var(--muted); }
   .communaute .taille { color: var(--muted); white-space: nowrap; }
+  /* Encodage visuel du type d'entité (ticket wayfinder 0026) */
+  .type { display: flex; align-items: center; gap: .5rem; padding: .25rem 0; color: var(--text);
+          cursor: pointer; }
+  .type input { margin: 0; padding: 0; width: auto; }
+  .type svg { color: var(--muted); flex-shrink: 0; }
+  .type .taille { color: var(--muted); margin-left: auto; white-space: nowrap; }
+  .type:has(input:not(:checked)) { color: var(--muted); }
+  .type:has(input:not(:checked)) svg { opacity: .4; }
   /* Puces des trous structurels (ticket wayfinder 0021) */
   .trou { display: block; width: 100%; text-align: left; border: 1px dashed var(--line);
           border-radius: 8px; padding: .35rem .6rem; margin-top: .5rem; background: var(--bg);
@@ -106,9 +123,14 @@
     <label><input type="checkbox" id="f-conversation" checked> conversation</label>
     <label><input type="checkbox" id="f-document" checked> document</label>
   </fieldset>
-  <fieldset title="Faits obsolètes (invalid_at renseigné)">
+  <fieldset title="Faits obsolètes À CE JOUR (invalid_at renseigné) — ce filtre ignore volontairement le curseur temporel : le rendre temporel ferait sauter le graphe pendant le glissement">
     <label><input type="checkbox" id="f-obsoletes" checked> obsolètes</label>
     <label><input type="checkbox" id="obsoletes-masques"> les masquer (plutôt que les estomper)</label>
+  </fieldset>
+  <fieldset title="Lecture temporelle (ticket wayfinder 0027) : à la date choisie, un fait pas encore valide vire à l'ardoise, un fait déjà révolu au rouille ; les faits présents gardent leur couleur de provenance">
+    <label>à la date <input type="range" id="curseur-temporel" min="0" max="0" value="0" step="1" disabled></label>
+    <span id="date-curseur">—</span>
+    <button type="button" id="btn-maintenant" title="Revenir à maintenant (curseur au maximum)">maintenant</button>
   </fieldset>
   <fieldset title="Ponts entre communautés : mode squelette (entités reliant plusieurs communautés)">
     <label><input type="checkbox" id="mode-ponts"> ponts</label>
@@ -121,6 +143,7 @@
   <fieldset title="Dimension de la scène">
     <label><input type="checkbox" id="mode-2d"> vue 2D</label>
   </fieldset>
+  <button type="button" id="btn-export-image" title="Exporter la vue actuelle en image PNG">Exporter l'image</button>
   <span id="status">Chargement du graphe complet…</span>
 </header>
 <main>
@@ -153,6 +176,8 @@
     <div id="insight"><p class="vide">Aucun récit généré pour l'instant.</p></div>
     <h2>Communautés</h2>
     <div id="communautes"><p class="vide">Aucune communauté détectée.</p></div>
+    <h2>Types</h2>
+    <div id="types"><p class="vide">Aucun type détecté.</p></div>
     <h2>Entité sélectionnée</h2>
     <div id="entite-selection"><p class="vide">Cliquer un nœud pour l'explorer.</p></div>
     <h2 id="titre-faits">Faits</h2>
@@ -176,6 +201,11 @@ import * as THREE from "three";
 import SpriteText from "/viz/vendor/three-spritetext.mjs";
 import { UnrealBloomPass } from "/viz/vendor/three/postprocessing/UnrealBloomPass.js";
 import { OutlinePass } from "/viz/vendor/three/postprocessing/OutlinePass.js";
+import { serialiser, analyser } from "/viz/adressabilite.js";
+import { formeDuType } from "/viz/encodageType.js";
+import {
+  bornesTemporelles, etatTemporel, decompteTemporel, COULEUR_FUTUR, COULEUR_REVOLU,
+} from "/viz/lectureTemporelle.js";
 
 // Palette de communautés : Okabe & Ito 2008 — les 8 teintes catégorielles les
 // plus citées en dataviz accessible, choisies pour rester distinguables en
@@ -231,6 +261,11 @@ const state = {
   // masques — jamais persisté, purement visuel/analytique. `faitsMasques`
   // mémorise {uuid, texte} pour afficher des puces lisibles.
   etSi: { actif: false, noeudsMasques: [], faitsMasques: [] },
+  // Filtre par type (ticket wayfinder 0026) : types explicitement décochés
+  // dans la légende — vide par défaut (tout visible). Un nœud sans type n'est
+  // jamais filtré (pas de case pour « inconnu »). Persiste across rafraîchissements
+  // de la légende (checkboxes reconstruites, l'état lui ne l'est pas).
+  typesMasques: new Set(),
 };
 
 // Le focus : le nœud sous la souris prime sur celui épinglé au dernier clic ;
@@ -287,6 +322,58 @@ function provenanceVisible(a) {
 function validiteVisible(a) {
   if (a.invalid_at === null) return true;
   return document.getElementById("f-obsoletes").checked;
+}
+
+// --- Lecture temporelle (ticket wayfinder 0027) : curseur « à cette date »,
+// axe supplémentaire indépendant des filtres ci-dessus — jamais de retrait,
+// seulement de l'estompage (aretesVisibles() reste seul maître du retrait). ---
+function curseurTemporel() { return document.getElementById("curseur-temporel"); }
+
+// Au maximum (position par défaut, « maintenant ») : aucun filtrage temporel,
+// quel que soit le contenu du corpus — c'est ce qui garantit l'invariant de
+// non-régression (rendu identique à avant ce ticket) sans dépendre d'une
+// comparaison de dates aux bornes, toujours sujette à des égalités piégeuses.
+function curseurAuMaximum() {
+  const c = curseurTemporel();
+  return c.disabled || Number(c.value) >= Number(c.max);
+}
+
+function dateDuCurseur() { return new Date(Number(curseurTemporel().value)); }
+
+function etatTemporelArete(a) {
+  return curseurAuMaximum() ? "present" : etatTemporel(a, dateDuCurseur());
+}
+
+// L'étiquette porte le « relief » qu'exige une couleur volontairement discrète
+// (COULEUR_FUTUR recule vers le fond) : elle nomme les trois états et les
+// compte, tenant lieu de légende sans encombrer l'écran en permanence. À
+// « maintenant », un seul mot — les décomptes n'ont d'intérêt qu'en remontant.
+function rafraichirEtiquetteCurseur() {
+  const c = curseurTemporel();
+  const etiquette = document.getElementById("date-curseur");
+  if (c.disabled) { etiquette.textContent = "aucune date dans le corpus"; return; }
+  if (curseurAuMaximum()) { etiquette.textContent = "maintenant"; return; }
+  const d = decompteTemporel(state.aretes, dateDuCurseur());
+  etiquette.textContent = `${dateDuCurseur().toLocaleDateString("fr-FR")}`
+    + ` — ${d.present} présents · ${d.futur} à venir · ${d.revolu} révolus`;
+}
+
+// Recalcule les bornes sur les arêtes actuellement chargées et repositionne
+// le curseur au maximum (« maintenant ») — appelé à chaque (re)chargement de
+// données, jamais lors d'un simple déplacement du curseur par l'utilisateur.
+function repositionnerCurseurTemporel() {
+  const bornes = bornesTemporelles(state.aretes);
+  const c = curseurTemporel();
+  if (!bornes) {
+    c.disabled = true;
+    c.min = "0"; c.max = "0"; c.value = "0";
+  } else {
+    c.disabled = false;
+    c.min = String(bornes.min.getTime());
+    c.max = String(bornes.max.getTime());
+    c.value = c.max;
+  }
+  rafraichirEtiquetteCurseur();
 }
 
 // Fusionne les nœuds/arêtes reçus (graphe complet ou voisinage étendu) dans l'état
@@ -405,6 +492,7 @@ async function chargerGrapheComplet({ allege = false } = {}) {
     ? `Vue allégée (entités dominantes + voisinage) sur ${total} — bouton « Graphe complet » pour tout voir.`
     : `Graphe complet : ${total}.`);
   calculerPonts();
+  repositionnerCurseurTemporel();
   rafraichir();
   rafraichirLegende();
 }
@@ -413,6 +501,7 @@ async function chargerGrapheComplet({ allege = false } = {}) {
 // pas seulement les nœuds visibles/filtrés — la légende est une carte du
 // graphe entier, indépendante des filtres de provenance/obsolescence.
 function rafraichirLegende() {
+  rafraichirLegendeTypes();
   const zone = document.getElementById("communautes");
   const tailles = new Map(); // communauté → nombre de nœuds
   for (const n of state.noeuds.values()) {
@@ -439,8 +528,41 @@ function rafraichirLegende() {
       state.verrouille = premiereEntite;
       rafraichirSurlignage();
       rafraichirEtiquettes();
+      refleterHash();
     });
     zone.append(bouton);
+  }
+}
+
+// Légende des types (ticket wayfinder 0026) : mêmes règles que la légende des
+// communautés (tout `state.noeuds`, indépendante des filtres) — seuls les
+// types réellement présents sortent, dans l'ordre de FORMES_PAR_TYPE.
+function rafraichirLegendeTypes() {
+  const zone = document.getElementById("types");
+  const tailles = new Map(); // type → nombre de nœuds
+  for (const n of state.noeuds.values()) {
+    if (!n.type) continue;
+    tailles.set(n.type, (tailles.get(n.type) ?? 0) + 1);
+  }
+  if (!tailles.size) { zone.innerHTML = '<p class="vide">Aucun type détecté.</p>'; return; }
+  zone.replaceChildren();
+  for (const [type, taille] of tailles) {
+    const forme = formeDuType(type);
+    const ligne = document.createElement("label");
+    ligne.className = "type";
+    ligne.innerHTML = '<input type="checkbox">'
+      + `${svgIconeForme(forme)}<span class="nom"></span><span class="taille"></span>`;
+    const case_ = ligne.querySelector("input");
+    case_.checked = !state.typesMasques.has(type);
+    case_.addEventListener("change", () => {
+      if (case_.checked) state.typesMasques.delete(type);
+      else state.typesMasques.add(type);
+      rafraichir();
+      if (state.selection) afficherFaits(state.selection);
+    });
+    ligne.querySelector(".nom").textContent = TYPES_ONTOLOGIE[type] ?? type;
+    ligne.querySelector(".taille").textContent = `(${taille})`;
+    zone.append(ligne);
   }
 }
 
@@ -450,6 +572,15 @@ async function explorer(entite, { fusion = false } = {}) {
   const res = await fetch(`/graph?entity=${encodeURIComponent(entite)}&depth=${profondeur}`);
   if (!res.ok) { setStatus(`Erreur ${res.status}`); return; }
   const data = await res.json();
+  // Voisinage vide : entité inconnue (le backend renvoie le centre en écho, sans
+  // arête) ou entité réellement isolée. Ne pas détruire la vue courante pour un
+  // nœud fantôme — statut franc, on garde ce qui est à l'écran (adressabilité,
+  // ticket 0025) ; vaut aussi pour la barre de recherche. Renvoie false pour
+  // signaler aux appelants qu'aucune exploration n'a eu lieu.
+  if (!data.edges.length) {
+    setStatus(`« ${entite} » : aucun voisinage connu.`);
+    return false;
+  }
   if (!fusion) { state.noeuds.clear(); state.aretes = []; }
   state.centre = data.center;
   state.vueAllegee = false; // exploration ciblée : on montre exactement ce qui a été demandé
@@ -457,12 +588,24 @@ async function explorer(entite, { fusion = false } = {}) {
   fusionner(data.nodes.map((nom) => ({ nom, communaute: 0, centralite: 0 })), data.edges);
   state.ponts.clear(); // communautés écrasées par la fusion : le mode ponts se suspend
   setStatus(`${state.noeuds.size} entités, ${state.aretes.length} faits.`);
+  repositionnerCurseurTemporel();
   rafraichir();
   selectionner(data.center);
+  refleterHash();
+  return true;
+}
+
+// Filtre par type (ticket wayfinder 0026) : un nœud sans type n'est jamais
+// filtré, seuls les types cochés dans la légende comptent.
+function typeVisible(nom) {
+  const n = state.noeuds.get(nom);
+  return !n?.type || !state.typesMasques.has(n.type);
 }
 
 function aretesVisibles() {
-  return state.aretes.filter((a) => provenanceVisible(a) && validiteVisible(a));
+  return state.aretes.filter(
+    (a) => provenanceVisible(a) && validiteVisible(a) && typeVisible(a.source) && typeVisible(a.target)
+  );
 }
 
 function rafraichir() {
@@ -470,9 +613,12 @@ function rafraichir() {
   let aretes = aretesVisibles().filter((a) => !(masquerObsoletes && a.invalid_at !== null));
   const relies = new Set(aretes.flatMap((a) => [a.source, a.target]));
   // En mode « et si ? » (ticket 0030), les entités isolées par un masque
-  // restent en scène : les orphelins font partie de ce qu'on veut voir.
+  // restent en scène : les orphelins font partie de ce qu'on veut voir. Le
+  // filtre par type, lui, est absolu (&&) : un type décoché disparaît même
+  // épinglé comme centre.
   let noeuds = [...state.noeuds.values()].filter(
-    (n) => relies.has(n.nom) || n.nom === state.centre || state.noeuds.size <= 1 || etSiActif()
+    (n) => typeVisible(n.nom)
+      && (relies.has(n.nom) || n.nom === state.centre || state.noeuds.size <= 1 || etSiActif())
   );
   if (state.vueAllegee) {
     const dominants = new Set(
@@ -495,6 +641,9 @@ function rafraichir() {
     links: aretes.map((a) => ({
       id: cle(a), source: a.source, target: a.target, texte: a.text,
       provenance: a.provenance, obsolete: a.invalid_at !== null, uuid: a.uuid ?? null,
+      // Lecture temporelle (ticket 0027) : jamais retiré ici (voir aretesVisibles,
+      // seul maître du retrait) — seulement reteinté par couleurDuLien ci-dessous.
+      etatTemporel: etatTemporelArete(a),
     })),
   };
   graphe.graphData(donnees);
@@ -507,6 +656,27 @@ const TYPES_ONTOLOGIE = {
   Activite: "Activité", Personne: "Personne", Lieu: "Lieu", Organisation: "Organisation",
   Animal: "Animal", Bien: "Bien", Projet: "Projet", Aliment: "Aliment",
 };
+
+// Icônes 2D de la légende (ticket wayfinder 0026) : suggèrent la primitive 3D
+// posée sur le nœud (encodageType.js) sans la reproduire fidèlement — traits
+// (currentColor), pas de remplissage, viewBox 12×12.
+const ICONES_FORME = {
+  sphere: '<circle cx="6" cy="6" r="4.6" fill="currentColor"/>',
+  cone: '<polygon points="6,1 11,11 1,11" fill="currentColor"/>',
+  boite: '<rect x="1.5" y="1.5" width="9" height="9" fill="currentColor"/>',
+  tetraedre: '<polygon points="6,1 11,9 1,9" fill="currentColor"/>'
+    + '<line x1="6" y1="1" x2="6" y2="9" stroke="var(--panel)"/>',
+  dodecaedre: '<polygon points="6,1 10.76,4.46 8.94,10.05 3.06,10.05 1.25,4.46" fill="currentColor"/>',
+  icosaedre: '<polygon points="6,1 10.33,3.5 10.33,8.5 6,11 1.67,8.5 1.67,3.5" fill="currentColor"/>',
+  capsule: '<rect x="3" y="1" width="6" height="10" rx="3" fill="currentColor"/>',
+  // Le tore est le seul plein-mais-troué par nature (anneau) : gardé en
+  // anneau épais plutôt que rempli, sans quoi il devient indiscernable d'un
+  // disque plein.
+  tore: '<circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" stroke-width="2.2"/>',
+};
+function svgIconeForme(forme) {
+  return `<svg viewBox="0 0 12 12" width="14" height="14" aria-hidden="true">${ICONES_FORME[forme] ?? ""}</svg>`;
+}
 
 function badgeCorrige(objet) {
   const badge = document.createElement("span");
@@ -654,6 +824,19 @@ function afficherFaits(entite) {
     div.children[0].textContent = a.text;
     div.querySelector(".badge").textContent = a.provenance.source === "conversation" ? "conversation" : "document";
     div.querySelector(".meta span:last-child").textContent = [a.provenance.name, dates].filter(Boolean).join(" · ");
+    // Lecture temporelle (ticket 0027) : une pastille qui NOMME l'état plutôt
+    // qu'une opacité qui le suggère — sur du texte, estomper nuit à la lecture
+    // sans rien apprendre. C'est aussi ici qu'on apprend les couleurs de la
+    // scène 3D : le mot et la teinte sont donnés ensemble.
+    const etat = etatTemporelArete(a);
+    if (etat !== "present") {
+      const pastille = document.createElement("span");
+      pastille.className = `badge ${etat}`;
+      pastille.textContent = etat === "revolu"
+        ? `révolu au ${dateDuCurseur().toLocaleDateString("fr-FR")}`
+        : "pas encore";
+      div.querySelector(".meta").prepend(pastille, " ");
+    }
     // Corrections ciblées (ticket 0029) : « marquer faux » sur un fait actif,
     // « annuler » sur les seules invalidations manuelles (la trace les
     // distingue) — celles apprises par Graphiti restent intouchables.
@@ -686,8 +869,36 @@ function afficherFaits(entite) {
 const COULEUR_ESTOMPEE_NOEUD = "#33373f";
 const COULEUR_ESTOMPEE_LIEN = "#20232a";
 
+function couleurProvenance(l) {
+  return l.provenance.source === "document" ? "#74c69d" : "#6ea8fe";
+}
+
 function couleurDeBase(l) {
-  return l.obsolete ? "#6c757d" : (l.provenance.source === "document" ? "#74c69d" : "#6ea8fe");
+  return l.obsolete ? "#6c757d" : couleurProvenance(l);
+}
+
+// Couleur d'un lien selon la date lue (ticket 0027). Deux régimes distincts,
+// et c'est voulu : à « maintenant » on lit l'état du monde (le gris dit
+// « obsolète aujourd'hui ») ; dès que le curseur bouge, on lit une DATE, et
+// le gris d'aujourd'hui n'a plus de sens — un fait invalidé en 2027 était bien
+// vivant en 2025 et doit reprendre sa couleur de provenance. Le petit saut de
+// couleur au premier pixel de glissement marque cette frontière.
+function couleurSelonLaDate(l) {
+  if (curseurAuMaximum()) return couleurDeBase(l);
+  if (l.etatTemporel === "futur") return COULEUR_FUTUR;
+  if (l.etatTemporel === "revolu") return COULEUR_REVOLU;
+  return couleurProvenance(l);
+}
+
+// Couleur finale d'un lien : ponts et focus priment sur la lecture temporelle
+// (ce sont des modes d'exploration explicites, le curseur est une lecture).
+function couleurDuLien(l) {
+  if (modePontsActif()) {
+    return areteInterCommunautes(l) ? COULEUR_LIEN_INTER : COULEUR_LIEN_TERNI;
+  }
+  const focus = ensembleEnFocus();
+  if (focus && !focus.liens.has(l.id)) return COULEUR_ESTOMPEE_LIEN;
+  return couleurSelonLaDate(l);
 }
 
 function volerVers(noeud) {
@@ -776,6 +987,37 @@ function objetDuNoeud(n) {
   return etiquette;
 }
 
+// Glyphe de type (ticket wayfinder 0026) : arêtes seules (EdgesGeometry),
+// pas de face pleine — un mesh translucide plein (essai initial) noyait la
+// sphère et se confondait avec les voisins (retour utilisateur : « moche »,
+// « illisible »). Un fil de fer fin, calé au ras du rayon réel de la sphère
+// (nodeRelSize 4 × ∛val, sans marge), lit comme un contour discret plutôt
+// qu'une forme en plus. Reconstruit à chaque appel (comme le losange des
+// ponts) : pas de cache, la taille dépend de la centralité du nœud.
+// Personne (le type le plus fréquent) reste la sphère nue du nœud — aucune
+// entrée « sphere » ci-dessous, donc `geometries[forme]` vaut `undefined` et
+// glypheDuNoeud() renvoie null pour ce cas comme pour les nœuds sans type.
+function glypheDuNoeud(n) {
+  const forme = formeDuType(n.type);
+  if (!forme) return null;
+  const r = 4 * Math.cbrt(valeurNoeud(n));
+  const geometries = {
+    cone: () => new THREE.ConeGeometry(r * 0.8, r * 1.7, 16),
+    boite: () => new THREE.BoxGeometry(r * 1.5, r * 1.5, r * 1.5),
+    tetraedre: () => new THREE.TetrahedronGeometry(r * 1.15),
+    dodecaedre: () => new THREE.DodecahedronGeometry(r * 1.05),
+    icosaedre: () => new THREE.IcosahedronGeometry(r * 1.05),
+    capsule: () => new THREE.CapsuleGeometry(r * 0.55, r * 0.9, 4, 16),
+    tore: () => new THREE.TorusGeometry(r * 0.95, r * 0.18, 12, 24),
+  };
+  const geometrie = geometries[forme]?.();
+  if (!geometrie) return null;
+  return new THREE.Mesh(
+    geometrie,
+    new THREE.MeshStandardMaterial({ color: "#e8e9eb", roughness: 0.45, metalness: 0.1 })
+  );
+}
+
 function nettoyerEtiquettes() {
   for (const [nom, sprite] of spriteParNoeud) {
     if (state.noeuds.has(nom)) continue;
@@ -823,7 +1065,10 @@ function rafraichirHalo() {
 }
 
 // --- Scène 3d-force-graph (vendorée, zéro CDN) ---
-const graphe = ForceGraph3D()(document.getElementById("scene"))
+// preserveDrawingBuffer : sans lui, l'export d'image (ticket wayfinder 0026)
+// capture un canvas parfois vide — le buffer WebGL peut être effacé avant que
+// toDataURL() ne lise, hors de toute maîtrise du code appelant.
+const graphe = ForceGraph3D({ rendererConfig: { preserveDrawingBuffer: true } })(document.getElementById("scene"))
   .backgroundColor("#0e1013")
   .nodeLabel((n) => n.nom)
   .nodeColor((n) => {
@@ -839,26 +1084,31 @@ const graphe = ForceGraph3D()(document.getElementById("scene"))
   .nodeVal(valeurNoeud)
   .nodeThreeObject((n) => {
     const etiquette = objetDuNoeud(n);
-    if (!(modePontsActif() && state.ponts.has(n.nom))) return etiquette;
-    // Losange blanc du pont, par-dessus la sphère par défaut (extend=true) —
-    // rayon aligné sur celui de la sphère (nodeRelSize 4 × ∛val).
+    if (modePontsActif() && state.ponts.has(n.nom)) {
+      // Losange blanc du pont, par-dessus la sphère par défaut (extend=true) —
+      // rayon aligné sur celui de la sphère (nodeRelSize 4 × ∛val). Prime sur
+      // le glyphe de type (ticket 0026) : les deux superposés seraient illisibles.
+      const groupe = new THREE.Group();
+      groupe.add(etiquette);
+      groupe.add(new THREE.Mesh(
+        new THREE.OctahedronGeometry(4 * Math.cbrt(valeurNoeud(n)) + 1.5),
+        new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.3 })
+      ));
+      return groupe;
+    }
+    const glyphe = glypheDuNoeud(n);
+    if (!glyphe) return etiquette;
     const groupe = new THREE.Group();
     groupe.add(etiquette);
-    groupe.add(new THREE.Mesh(
-      new THREE.OctahedronGeometry(4 * Math.cbrt(valeurNoeud(n)) + 1.5),
-      new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.3 })
-    ));
+    groupe.add(glyphe);
     return groupe;
   })
   .nodeThreeObjectExtend(true)
-  .linkColor((l) => {
-    if (modePontsActif()) {
-      return areteInterCommunautes(l) ? COULEUR_LIEN_INTER : COULEUR_LIEN_TERNI;
-    }
-    const focus = ensembleEnFocus();
-    if (!focus) return couleurDeBase(l);
-    return focus.liens.has(l.id) ? couleurDeBase(l) : COULEUR_ESTOMPEE_LIEN;
-  })
+  // Lecture temporelle (ticket 0027) : l'absence se dit ICI, par la teinte.
+  // Piège à ne pas re-tenter : `linkOpacity` est un NOMBRE global dans
+  // 3d-force-graph, pas un accesseur par lien — lui passer une fonction donne
+  // `fonction × nombre` = NaN, en silence, et la scène ne change pas.
+  .linkColor(couleurDuLien)
   .linkOpacity(0.55)
   .linkWidth((l) => {
     if (modePontsActif()) return areteInterCommunautes(l) ? 2.2 : 0.25;
@@ -883,6 +1133,7 @@ const graphe = ForceGraph3D()(document.getElementById("scene"))
     state.verrouille = n.nom;
     rafraichirSurlignage();
     rafraichirEtiquettes();
+    refleterHash();
     explorer(n.nom, { fusion: true });
   })
   .onLinkClick((l) => {
@@ -904,6 +1155,7 @@ const graphe = ForceGraph3D()(document.getElementById("scene"))
     state.surlignes.clear();
     rafraichirSurlignage();
     rafraichirEtiquettes();
+    refleterHash();
   });
 
 // Post-traitement : le halo de sélection (OutlinePass) et un bloom léger sur
@@ -957,21 +1209,46 @@ document.getElementById("form-recherche").addEventListener("submit", (e) => {
   if (entite) explorer(entite);
 });
 document.getElementById("btn-graphe-complet").addEventListener("click", () => chargerGrapheComplet());
+// Export d'image (ticket wayfinder 0026, à-côté acté au grilling) : capture
+// le canvas WebGL tel qu'affiché, aucune requête réseau.
+document.getElementById("btn-export-image").addEventListener("click", () => {
+  const lien = document.createElement("a");
+  lien.download = `memory-forge-graphe-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.png`;
+  lien.href = graphe.renderer().domElement.toDataURL("image/png");
+  lien.click();
+});
 for (const id of ["f-conversation", "f-document", "f-obsoletes", "obsoletes-masques"]) {
   document.getElementById(id).addEventListener("change", () => {
     rafraichir();
     if (state.selection) afficherFaits(state.selection);
   });
 }
+// Lecture temporelle (ticket 0027) : `input` (pas `change`) pour rafraîchir
+// pendant le glissement, comme le seuil des ponts (#seuil-ponts) déjà en place.
+document.getElementById("curseur-temporel").addEventListener("input", () => {
+  rafraichirEtiquetteCurseur();
+  rafraichir();
+  if (state.selection) afficherFaits(state.selection);
+});
+document.getElementById("btn-maintenant").addEventListener("click", () => {
+  const c = curseurTemporel();
+  c.value = c.max;
+  rafraichirEtiquetteCurseur();
+  rafraichir();
+  if (state.selection) afficherFaits(state.selection);
+});
 document.getElementById("mode-2d").addEventListener("change", (e) => {
   graphe.numDimensions(e.target.checked ? 2 : 3);
+  refleterHash();
 });
+document.getElementById("profondeur").addEventListener("change", refleterHash);
 // Mode ponts : réappliquer nodeThreeObject reconstruit les losanges (même
 // recette que rafraichirSurlignage : re-poser un accesseur avec lui-même).
 function rafraichirModePonts() {
   graphe.nodeThreeObject(graphe.nodeThreeObject());
   graphe.nodeVal(graphe.nodeVal());
   rafraichirSurlignage();
+  refleterHash();
 }
 document.getElementById("mode-ponts").addEventListener("change", rafraichirModePonts);
 document.getElementById("seuil-ponts").addEventListener("input", () => {
@@ -1005,6 +1282,7 @@ async function rejouerEtSi() {
     Object.entries(data.graphe.noms_communautes ?? {}).map(([cle, nom]) => [Number(cle), nom])
   );
   calculerPonts();
+  repositionnerCurseurTemporel();
   rafraichir();
   rafraichirLegende();
   rafraichirPanneauEtSi();
@@ -1176,8 +1454,65 @@ function appliquerVue(etat) {
   }
   rafraichirSurlignage();
   rafraichirEtiquettes();
+  refleterHash();
 }
 window.appliquerVue = appliquerVue;
+
+// --- Adressabilité de la vue (ticket wayfinder 0025) : miroir état ⇄ hash. ---
+// L'écriture-miroir passe par replaceState (ne déclenche pas `hashchange`) et
+// n'empile pas d'historique ; `appliquantHash` neutralise toute ré-écriture
+// pendant qu'on applique un état venu de l'URL.
+let appliquantHash = false;
+
+function etatVueCourant() {
+  return {
+    focus: state.verrouille ?? state.centre ?? null,
+    surligner: [...state.surlignes],
+    prof: document.getElementById("profondeur").value,
+    ponts: document.getElementById("mode-ponts").checked
+      ? Number(document.getElementById("seuil-ponts").value) : null,
+    deuxD: document.getElementById("mode-2d").checked,
+  };
+}
+
+function refleterHash() {
+  if (appliquantHash) return;
+  const frag = serialiser(etatVueCourant());
+  history.replaceState(null, "", frag ? `#${frag}` : location.pathname + location.search);
+}
+
+// Rejoue un état d'URL (URL collée, bouton précédent, ou hash poussé plus tard
+// par le pilotage LLM). `focus` prime sur `ponts` : un focus absent de la vue
+// déclenche l'explore-to-fetch, et explorer() suspend de lui-même le mode ponts.
+async function appliquerEtatAdresse(etat) {
+  appliquantHash = true;
+  try {
+    document.getElementById("profondeur").value = etat.prof;
+    const chk2d = document.getElementById("mode-2d");
+    if (chk2d.checked !== etat.deuxD) {
+      chk2d.checked = etat.deuxD;
+      graphe.numDimensions(etat.deuxD ? 2 : 3);
+    }
+    document.getElementById("mode-ponts").checked = etat.ponts !== null;
+    if (etat.ponts !== null) document.getElementById("seuil-ponts").value = String(etat.ponts);
+    calculerPonts();
+    rafraichirModePonts();
+    // focus absent de la vue allégée → explore-to-fetch. Si le voisinage est
+    // vide, explorer() garde la vue riche et pose le statut lui-même ; on
+    // surligne alors ce qui est présent, sans caméra vers un nœud fantôme.
+    if (etat.focus && !state.noeuds.has(etat.focus)) {
+      await explorer(etat.focus);
+    }
+    appliquerVue({ focus: etat.focus, surligner: etat.surligner });
+  } finally {
+    appliquantHash = false;
+  }
+}
+
+window.addEventListener("hashchange", () => {
+  if (appliquantHash) return;
+  appliquerEtatAdresse(analyser(location.hash));
+});
 
 function afficherMonologue(monologue) {
   const zone = document.getElementById("monologue");
@@ -1259,7 +1594,9 @@ document.getElementById("btn-rejouer").addEventListener("click", () => {
   envoyerInterrogation({ requete: { cypher, parametres } });
 });
 
-chargerGrapheComplet({ allege: true });
+chargerGrapheComplet({ allege: true }).then(() => {
+  if (location.hash && location.hash !== "#") appliquerEtatAdresse(analyser(location.hash));
+});
 </script>
 </body>
 </html>

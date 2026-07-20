@@ -1,6 +1,6 @@
 ---
 label: wayfinder:task
-statut: ouvert
+statut: clos
 assigne:
 bloque-par: []
 carte: carte-graphe-memoire
@@ -37,3 +37,14 @@ se notent au fil de l'eau : ce qui déçoit nourrit la graduation du brouillard.
 Les quatre livraisons sont jugées (validées ou recalées avec observations
 notées dans la résolution), et le brouillard « à l'usage » de la carte peut
 être re-trié à la lumière de l'expérience vécue.
+
+## Résolution
+
+**Séance tenue et validée par l'utilisateur le 2026-07-20.** Préalable levé :
+image `memory` rebuildée (`docker compose up -d --build memory`, `/health` ok)
+pour résorber la divergence du conteneur signalée le 2026-07-18. Les quatre
+livraisons (sujets dominants 0018, insight français du LLM local 0020, trous
+structurels 0021, graphe dans la coquille 0022) sont **jugées bonnes au réel**
+(œil `/viz`, oreille `raconter_memoire`, onglet « Graphe » de la coquille) —
+aucun recalage. La porte est franchie : le brouillard « à l'usage » de la carte
+peut être re-trié à la lumière de l'expérience vécue.

@@ -28,6 +28,7 @@ LIMITE_GRAPHE_ET_SI = 500
 
 VIZ_PAGE = Path(__file__).resolve().parent.parent / "viz" / "index.html"
 VENDOR_DIR = Path(__file__).resolve().parent.parent / "viz" / "vendor"
+VIZ_DIR = Path(__file__).resolve().parent.parent / "viz"
 
 router = APIRouter()
 
@@ -36,6 +37,30 @@ router = APIRouter()
 def viz_page() -> FileResponse:
     """Page de visualisation 3D du graphe complet (roadmap B1, ADR 0010 point 6)."""
     return FileResponse(VIZ_PAGE)
+
+
+@router.get("/viz/adressabilite.js", include_in_schema=False)
+def viz_adressabilite() -> FileResponse:
+    """Module ES de l'adressabilité de la vue (grammaire de hash ⇄ EtatVue,
+    ticket wayfinder 0025) — servi hors du dossier vendor : c'est notre code,
+    pas une bibliothèque tierce."""
+    return FileResponse(VIZ_DIR / "adressabilite.js", media_type="application/javascript")
+
+
+@router.get("/viz/encodageType.js", include_in_schema=False)
+def viz_encodage_type() -> FileResponse:
+    """Module ES de l'encodage visuel du type d'entité (type → forme 3D,
+    ticket wayfinder 0026) — même traitement que adressabilite.js : notre
+    code, pas du vendor."""
+    return FileResponse(VIZ_DIR / "encodageType.js", media_type="application/javascript")
+
+
+@router.get("/viz/lectureTemporelle.js", include_in_schema=False)
+def viz_lecture_temporelle() -> FileResponse:
+    """Module ES du curseur temporel « à cette date » (borne unique sur
+    valid_at/invalid_at, ticket wayfinder 0027) — même traitement que
+    adressabilite.js : notre code, pas du vendor."""
+    return FileResponse(VIZ_DIR / "lectureTemporelle.js", media_type="application/javascript")
 
 
 @router.get("/viz/vendor/{chemin_relatif:path}", include_in_schema=False)

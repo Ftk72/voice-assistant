@@ -91,6 +91,27 @@ class TestVizPage:
 
         assert response.status_code == 404
 
+    def test_le_module_adressabilite_est_servi(self, client):
+        response = client.get("/viz/adressabilite.js")
+
+        assert response.status_code == 200
+        assert "javascript" in response.headers["content-type"]
+        assert "serialiser" in response.text
+
+    def test_le_module_encodage_type_est_servi(self, client):
+        response = client.get("/viz/encodageType.js")
+
+        assert response.status_code == 200
+        assert "javascript" in response.headers["content-type"]
+        assert "formeDuType" in response.text
+
+    def test_le_module_lecture_temporelle_est_servi(self, client):
+        response = client.get("/viz/lectureTemporelle.js")
+
+        assert response.status_code == 200
+        assert "javascript" in response.headers["content-type"]
+        assert "presentALaDate" in response.text
+
 
 class TestGrapheComplet:
     async def test_port_trie_par_degre_decroissant_et_respecte_la_limite(self):
@@ -130,6 +151,11 @@ class TestGrapheComplet:
         noms = {n["nom"] for n in payload["noeuds"]}
         assert {"Léa", "Judo"} <= noms
         assert all("communaute" in n and "centralite" in n for n in payload["noeuds"])
+        # Type d'entité (ticket wayfinder 0026) : la clé sort toujours, même à None
+        # tant qu'aucune correction manuelle (ticket 0029) ne l'a posée — l'adaptateur
+        # factice n'assigne pas de type à l'extraction, seul le graphiti réel le fait
+        # via les labels Neo4j (cf. app/graph/ontologie.py).
+        assert all("type" in n for n in payload["noeuds"])
 
     def test_endpoint_filtre_par_provenance(self, client):
         client.post(

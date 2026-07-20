@@ -50,6 +50,33 @@ extractions de Graphiti — réouverture consciente d'une part du hors-périmèt
 
 <!-- une ligne par ticket clos : gist + lien -->
 
+- [Lecture temporelle](tickets/0027-lecture-temporelle.md) — **validé à l'œil
+  le 2026-07-20** : curseur à borne unique « à cette date », faits hors période
+  jamais retirés (le layout ne bouge pas) mais **reteintés** — ardoise pour ce
+  qui n'existe pas encore, rouille pour ce qui est révolu, provenance pour le
+  reste ; décomptes sous le curseur en guise de légende, pastilles nommées dans
+  le panneau. Le gris « obsolète » suit le curseur, la case « obsolètes » non
+  (la rendre temporelle ferait sauter le graphe). Coût serveur nul : les dates
+  étaient déjà servies. Trois tours ont été nécessaires — l'estompage par
+  transparence était à la fois mal véhiculé (`linkOpacity` n'est pas un
+  accesseur par lien) et, une fois réparé, trop subtil pour se lire.
+
+- [Encodage visuel du type d'entité](tickets/0026-encodage-visuel-du-type-d-entite.md)
+  — **validé à l'œil le 2026-07-20** après deux tours d'itération : Personne
+  reste la sphère nue, les sept autres types portent une primitive 3D pleine
+  (cône, boîte, tétraèdre, dodécaèdre, icosaèdre, capsule, tore), légende en
+  cases à cocher filtrantes, export PNG. L'exposition du type par l'API
+  était en réalité déjà livrée au ticket 0029 — seul le test contractuel
+  manquait.
+
+- [Séance de validation au réel](tickets/0024-seance-de-validation-au-reel.md)
+  — **tenue et validée le 2026-07-20** : après rebuild de l'image `memory`, les
+  quatre livraisons en attente de jugement HITL (0018 sujets dominants, 0020
+  insight français, 0021 trous structurels, 0022 graphe dans la coquille) sont
+  jugées bonnes au réel (œil `/viz`, oreille `raconter_memoire`, onglet
+  « Graphe » de la coquille), sans recalage. Débloque le re-tri du brouillard
+  « à l'usage ».
+
 - [Corpus synthétique de mémoire](tickets/0016-corpus-synthetique-de-memoire.md)
   — **livré au réel le 2026-07-18** : 264 entités / 555 faits injectés en
   Cypher direct (l'ingestion LLM ne garantit pas la topologie), rejouable et
@@ -122,6 +149,15 @@ extractions de Graphiti — réouverture consciente d'une part du hors-périmèt
   avant/après, orphelins du masque gardés en scène, retour au réel en un
   geste. L'insight LLM n'est pas rejoué (trop lent) : diff déterministe.
   Dernier des trois chantiers du grilling killer features.
+- [Pilotage LLM et adressabilité de la vue](tickets/0025-pilotage-llm-et-adressabilite-de-la-vue.md) —
+  **adressabilité livrée en TDD et validée au réel le 2026-07-20** (délégué
+  sonnet) : module pur `adressabilite.js` (grammaire de hash `serialiser` ⇄
+  `analyser`, 8 tests `node:test`), miroir parallèle `replaceState`/`hashchange`
+  dans `/viz` (la manipulation directe reste, chaque molette durable devient une
+  URL partageable), `focus` en explore-to-fetch primant sur `ponts`, et voisinage
+  vide qui garde la vue riche + statut (le backend renvoie le centre en écho, pas
+  un 404). Le **pilotage LLM (SSE)** est tranché mais **différé** : rien codé,
+  se replanifiera à l'usage.
 
 ## Pas encore spécifié
 
@@ -129,7 +165,8 @@ Brouillard trié au grilling du 2026-07-18 : quatre points ont gradué en
 tickets ([Séance de validation au réel](tickets/0024-seance-de-validation-au-reel.md),
 [Pilotage LLM et adressabilité de la vue](tickets/0025-pilotage-llm-et-adressabilite-de-la-vue.md),
 [Encodage visuel du type d'entité](tickets/0026-encodage-visuel-du-type-d-entite.md)
-— qui absorbe l'export d'image —,
+— qui absorbe l'export d'image, **clos le 2026-07-20** (voir Décisions
+ci-dessus) —,
 [Lecture temporelle](tickets/0027-lecture-temporelle.md)). Le second grilling
 du 2026-07-18 (killer features) a ajouté trois tickets à la frontière, jouables
 au navigateur sans attendre la séance :
