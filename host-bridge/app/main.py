@@ -11,6 +11,8 @@ from app.audio.base import AudioPlayer
 from app.audio.fake import FakePlayer
 from app.catalog import load_catalog
 from app.config import Settings
+from app.conversation.base import CanalConversation
+from app.conversation.fake import CanalFactice
 from app.mcp_server import build_mcp
 from app.routes.api import router
 
@@ -31,11 +33,20 @@ def build_player(settings: Settings) -> AudioPlayer:
     return FakePlayer()
 
 
+def build_canal_conversation(settings: Settings) -> CanalConversation:
+    if settings.canal_conversation == "transport":
+        from app.conversation.transport import CanalTransportVoix
+
+        return CanalTransportVoix(settings.transport_voix_url)
+    return CanalFactice()
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     catalog = load_catalog(settings.catalog_path)
     runner = build_runner(settings)
     player = build_player(settings)
+    canal_conversation = build_canal_conversation(settings)
     mcp = build_mcp(catalog, runner)
 
     @asynccontextmanager
@@ -48,6 +59,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.catalog = catalog
     app.state.runner = runner
     app.state.player = player
+    app.state.canal_conversation = canal_conversation
     app.include_router(router)
     app.mount("/mcp", mcp.streamable_http_app())
 

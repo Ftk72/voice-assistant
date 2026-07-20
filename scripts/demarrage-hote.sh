@@ -55,6 +55,7 @@ if ! curl -sf http://127.0.0.1:8500/health >/dev/null 2>&1; then
   HOST_BRIDGE_HOST=0.0.0.0 \
   HOST_BRIDGE_PLAYER=auto \
   HOST_BRIDGE_TOKEN="${TOKEN:-}" \
+  HOST_BRIDGE_CANAL_CONVERSATION=transport \
     nohup uv run python -m app >>"$HOME/.pont-hote.log" 2>&1 &
   cd ..
   for _ in $(seq 1 12); do curl -sf http://127.0.0.1:8500/health >/dev/null 2>&1 && break; sleep 5; done

@@ -20,6 +20,27 @@ Choix d'architecture : dans ce chemin réel, le STT et le TTS sont les services
 voice-forge, tous deux OpenAI-compat) ; seul le « cerveau » — le Dialogue
 Forge — n'a pas d'équivalent natif et passe par notre port `ClientDialogue`
 (adaptateur REST) enveloppé dans `ProcesseurDialogueForge`.
+
+**Chemin d'annonce (ticket wayfinder 0044).** Constaté au réel le 2026-07-20 :
+une annonce spontanée (fin de Tâche, échéance de minuteur) jouée sur les
+enceintes par le Pont hôte pendant une conversation ouverte est captée par le
+micro, transcrite par le STT, et l'assistant répond à sa propre voix. La parole
+de conversation, elle, n'a jamais ce défaut : elle sort par la coquille en
+WebRTC, dont la pile applique une annulation d'écho acoustique sur ce qu'elle
+rend elle-même. L'annonce du Pont hôte ne transite pas par WebRTC — l'AEC ignore
+son existence et ne peut rien soustraire.
+
+D'où `conversation_ouverte` / `jouer_annonce` : cet adaptateur garde une
+référence au `PipelineWorker` de la session en cours, et sait y pousser un
+`OutputAudioRawFrame` — exactement ce que fait déjà le handler
+`on_client_connected` pour le WAV d'accueil, validé au réel le 2026-07-16 (« si
+on l'entend, la voie sortante marche »). C'est la preuve que ce chemin
+d'injection fonctionne. Le Pont hôte interroge puis pousse ; hors conversation,
+il joue sur les enceintes comme avant.
+
+⚠️ **Aucun test ne couvre ce fichier** : il dépend de l'extra `pipecat`, non
+installé par défaut, et la suite est 100 % hors-ligne. Le nouveau chemin
+d'annonce n'a donc, lui non plus, jamais été exécuté à ce jour.
 """
 
 import logging
@@ -55,6 +76,11 @@ class TransportPipecat(Transport):
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
+        # Worker de la session en cours (une seule conversation à la fois dans
+        # la coquille) : posé par `executer_session`, remis à None à la
+        # déconnexion et en sortie de session. C'est par lui que les annonces
+        # entrent dans le flux sortant (ticket 0044).
+        self._worker: object | None = None
 
     async def demarrer(self) -> None:
         """SmallWebRTC n'a pas de session globale : rien à établir ici (les
@@ -62,6 +88,53 @@ class TransportPipecat(Transport):
 
     async def arreter(self) -> None:
         """Idem : la fermeture est gérée par connexion (handler `closed`)."""
+
+    def conversation_ouverte(self) -> bool:
+        """Vrai tant qu'une session Pipecat tourne (worker vivant). ⚠️ Jamais
+        exécuté à ce jour."""
+        return self._worker is not None
+
+    async def jouer_annonce(self, wav: bytes) -> bool:
+        """Injecte le WAV d'annonce dans le flux sortant de la session en cours,
+        pour que l'annulation d'écho de la coquille le voie (ticket 0044).
+
+        Le WAV arrive tel que voice-forge l'a produit (float32 possible, chunks
+        annexes) : on le passe par `NormaliseurWavPCM16`, écrit pour ça, avant
+        d'en faire une trame audio brute — comme le WAV d'accueil de
+        `on_client_connected`, dont ce code est le décalque.
+
+        Renvoie False sans lever si aucun worker n'est en cours : l'appelant (le
+        Pont hôte) se replie alors sur les enceintes. ⚠️ Jamais exécuté à ce
+        jour — aucun test ne peut couvrir ce chemin (extra `pipecat`)."""
+        worker = self._worker
+        if worker is None:
+            return False
+
+        from pipecat.frames.frames import OutputAudioRawFrame
+
+        from app.transport.normaliseur_wav import NormaliseurWavPCM16
+
+        normaliseur = NormaliseurWavPCM16()
+        # Le normaliseur émet un en-tête canonique de 44 octets qu'il faut
+        # retirer : `OutputAudioRawFrame` attend des échantillons nus, pas un WAV.
+        flux = normaliseur.avaler(wav) + normaliseur.clore()
+        echantillons = flux[44:]
+        if not echantillons or normaliseur.rate is None:
+            logger.warning("Annonce ignorée : WAV vide ou illisible (%d octets reçus).", len(wav))
+            return False
+
+        await worker.queue_frames(
+            [
+                OutputAudioRawFrame(
+                    audio=echantillons,
+                    sample_rate=normaliseur.rate,
+                    # Le normaliseur n'accepte que du mono (il lève sinon).
+                    num_channels=1,
+                )
+            ]
+        )
+        logger.info("Annonce injectée dans la conversation (%d octets PCM16).", len(echantillons))
+        return True
 
     async def executer_session(self, connexion: object) -> None:
         """Construit et fait tourner le pipeline voix pour une connexion WebRTC
@@ -183,11 +256,17 @@ class TransportPipecat(Transport):
 
         @transport.event_handler("on_client_disconnected")
         async def _deconnecte(_transport: object, _client: object) -> None:
+            # Plus de session : les annonces repartent sur les enceintes.
+            self._worker = None
             await worker.cancel()
 
+        # La session devient « ouverte » pour le Pont hôte à partir d'ici
+        # (ticket 0044) ; le `finally` la referme quoi qu'il arrive.
+        self._worker = worker
         runner = WorkerRunner(handle_sigint=False)
         try:
             await runner.add_workers(worker)
             await runner.run()
         finally:
+            self._worker = None
             await dialogue.aclose()

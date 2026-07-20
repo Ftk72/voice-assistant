@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     catalog_path: Path = Path("catalog.toml")
     runner: Literal["fake", "subprocess"] = "fake"
     player: Literal["fake", "auto"] = "fake"
+    # Canal de conversation : à qui demander si une conversation est ouverte,
+    # pour y router les annonces au lieu des enceintes (ticket wayfinder 0044).
+    canal_conversation: Literal["fake", "transport"] = "fake"
+    # Le transport-voix tourne en **natif Windows**, hors docker compose (seule
+    # la coquille peut lui donner la media WebRTC) : c'est donc une URL d'hôte,
+    # jamais un nom de service Docker.
+    transport_voix_url: str = "http://127.0.0.1:8700"
     # Jeton partagé exigé sur toutes les routes sauf /health quand il est défini
     # (le Pont écoute sur 0.0.0.0 en usage réel : seule la stack doit pouvoir
     # déclencher les actions). Vide = auth désactivée (dev local).
