@@ -1,5 +1,5 @@
-# Assistant vocal local — 10 services (dont 4 sur mesure : voice-forge, memory,
-# world, time ; le Pont hôte tourne hors Docker — ADR 0008). Voir docs/adr/.
+# Assistant vocal local — 12 services (dont 5 sur mesure : voice-forge, memory,
+# world, time, action ; le Pont hôte tourne hors Docker — ADR 0008). Voir docs/adr/.
 # Tous les ports hôte sont liés à 127.0.0.1 (debug uniquement — la coquille
 # consomme les forges en HTTP, ADR 0009).
 # Prérequis : modèles téléchargés via scripts/download-models.sh (voir README).
@@ -256,7 +256,7 @@ services:
       DIALOGUE_FORGE_MEMORY_FORGE_URL: http://memory:8200
       DIALOGUE_FORGE_OUTILS_BACKEND: mcp
       # Client MCP de time / world / memory (noms de services Docker).
-      DIALOGUE_FORGE_MCP_URLS: '["http://time:8400/mcp","http://world:8300/mcp","http://memory:8200/mcp"]'
+      DIALOGUE_FORGE_MCP_URLS: '["http://time:8400/mcp","http://world:8300/mcp","http://memory:8200/mcp","http://action:8800/mcp"]'
       DIALOGUE_FORGE_PERSONAS_DIR: /personas
       DIALOGUE_FORGE_VOIX_BACKEND: rest
       DIALOGUE_FORGE_VOICE_FORGE_URL: http://voice-forge:8100
@@ -273,6 +273,8 @@ services:
         condition: service_healthy
       time:
         condition: service_healthy
+      action:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8600/health')"]
       interval: 10s
@@ -280,6 +282,60 @@ services:
       retries: 30
       start_period: 30s
     restart: unless-stopped
+
+  # ---- L'agir (Action Forge, ADR 0013) ----
+
+  action:
+    build: ./action-forge
+    environment:
+      ACTION_FORGE_HOST: 0.0.0.0                # réseau Docker interne uniquement
+      ACTION_FORGE_ATELIER_BACKEND: docker
+      ACTION_FORGE_ATELIER_IMAGE: action-forge-atelier:latest
+      # Le cerveau de la boucle CodeAct (llama.cpp, API OpenAI-compat) — sans
+      # ces deux lignes, la forge retombe sur son LLM factice et « termine »
+      # toute Tâche par une réponse scriptée, journal vide.
+      ACTION_FORGE_LLM_BACKEND: openai
+      ACTION_FORGE_LLM_BASE_URL: http://llm:8080/v1
+      # Chemin HÔTE du dossier d'échange (contrat 0031 : hors dépôt) — le socket
+      # Docker fait résoudre les montages des Ateliers par le daemon hôte, donc
+      # ce chemin doit exister côté hôte, pas dans ce conteneur.
+      ACTION_FORGE_ECHANGE_DIR_HOTE: ${ACTION_FORGE_HOST_ECHANGE_DIR:-${HOME}/action-forge-echange}
+      ACTION_FORGE_ANNONCEUR: pont_hote
+      ACTION_FORGE_VOICE_FORGE_URL: http://voice-forge:8100
+      # Voix des annonces — doit exister dans le Voice Forge (sinon 400
+      # « Voix inconnue » silencieux). Vraie voix clonée (ticket wayfinder 0015).
+      ACTION_FORGE_ANNONCE_VOIX: Jackie
+      ACTION_FORGE_HOST_BRIDGE_URL: http://host.docker.internal:8500
+      # Jeton partagé du Pont hôte — même valeur que HOST_BRIDGE_TOKEN au
+      # lancement du Pont (fichier .env non versionné).
+      ACTION_FORGE_HOST_BRIDGE_TOKEN: ${HOST_BRIDGE_TOKEN:?définir HOST_BRIDGE_TOKEN dans .env}
+    volumes:
+      # Pilotage des Ateliers frères — jamais monté dans l'Atelier lui-même.
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      # joint le Pont hôte, qui tourne hors Docker — ADR 0008
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:8800:8800"
+    depends_on:
+      voice-forge:
+        condition: service_healthy
+      llm:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8800/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  # Image fixe de l'Atelier (contrat 0031) — jamais démarrée par `up` (profil
+  # dédié) : seule la forge `action` la pilote, via le socket Docker.
+  atelier-image:
+    build: ./action-forge/atelier
+    image: action-forge-atelier:latest
+    profiles: ["images"]
 
 volumes:
   voice-forge-cache:

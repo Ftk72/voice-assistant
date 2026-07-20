@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Action Forge — Atelier</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #0d0d0d; color: #ececec;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; justify-content: center; padding: 2rem 1rem;
+  }
+  main { width: 100%; max-width: 720px; }
+  h1 { font-size: 1.3rem; font-weight: 600; margin: 0 0 .25rem; }
+  p.sub { color: #9b9b9b; font-size: .85rem; margin: 0 0 1.5rem; }
+  .tache {
+    background: #171717; border: 1px solid #2a2a2a; border-radius: 12px;
+    padding: 1rem 1.25rem; margin-bottom: 1rem;
+  }
+  .entete { display: flex; align-items: center; gap: .6rem; }
+  .enonce { flex: 1; font-weight: 500; }
+  .statut {
+    font-size: .75rem; padding: .15rem .55rem; border-radius: 999px;
+    border: 1px solid #3a3a3a; color: #9b9b9b; white-space: nowrap;
+  }
+  .statut.en_cours { color: #60a5fa; border-color: #1e3a5f; }
+  .statut.terminee { color: #4ade80; border-color: #14532d; }
+  .statut.echouee { color: #f87171; border-color: #7f1d1d; }
+  .statut.annulee { color: #9b9b9b; border-color: #3a3a3a; }
+  .compte-rendu { margin-top: .5rem; font-size: .9rem; color: #ececec; }
+  .actions { margin-top: .6rem; display: flex; gap: .5rem; }
+  button {
+    background: #2a2a2a; color: #ececec; border: 1px solid #3a3a3a; border-radius: 8px;
+    padding: .35rem .75rem; font-size: .8rem; cursor: pointer;
+  }
+  button:hover { background: #3a3a3a; }
+  button.danger:hover { background: #7f1d1d; border-color: #991b1b; }
+  .journal {
+    margin-top: .6rem; font-size: .8rem; font-family: ui-monospace, monospace;
+    background: #0d0d0d; border: 1px solid #232323; border-radius: 8px;
+    padding: .6rem .75rem; max-height: 260px; overflow-y: auto; white-space: pre-wrap;
+    display: none;
+  }
+  .journal.ouvert { display: block; }
+  .pas { margin-bottom: .6rem; }
+  .pas:last-child { margin-bottom: 0; }
+  .pas .code { color: #93c5fd; }
+  .pas .resultat { color: #9b9b9b; }
+  .empty { color: #9b9b9b; font-size: .9rem; padding: .5rem 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Action Forge — Atelier</h1>
+  <p class="sub">Tâches confiées à l'assistant : énoncé, statut, compte rendu. Le journal
+    d'une Tâche s'ouvre au clic ; une Tâche en cours s'y met à jour toute seule.</p>
+
+  <div id="liste"></div>
+</main>
+
+<script>
+const liste = document.getElementById("liste");
+const flux = new Map(); // tache_id -> EventSource ouvert
+const ouvertes = new Set(); // tache_id dont le journal est déplié
+
+function libelleStatut(statut) {
+  return {en_cours: "en cours", terminee: "terminée", echouee: "échouée", annulee: "annulée"}[statut] || statut;
+}
+
+function rendrePas(pas) {
+  const code = document.createElement("div");
+  code.className = "code";
+  code.textContent = "$ " + pas.code;
+  const resultat = document.createElement("div");
+  resultat.className = "resultat";
+  const r = pas.resultat;
+  resultat.textContent = (r.sortie_standard || "") + (r.erreur_standard || "") + `(code ${r.code_retour})`;
+  const bloc = document.createElement("div");
+  bloc.className = "pas";
+  bloc.append(code, resultat);
+  return bloc;
+}
+
+function rendreTache(tache) {
+  const carte = document.createElement("div");
+  carte.className = "tache";
+
+  const entete = document.createElement("div");
+  entete.className = "entete";
+  const enonce = document.createElement("div");
+  enonce.className = "enonce";
+  enonce.textContent = tache.enonce;
+  const statut = document.createElement("span");
+  statut.className = "statut " + tache.statut;
+  statut.textContent = libelleStatut(tache.statut);
+  entete.append(enonce, statut);
+  carte.append(entete);
+
+  if (tache.compte_rendu) {
+    const cr = document.createElement("div");
+    cr.className = "compte-rendu";
+    cr.textContent = tache.compte_rendu;
+    carte.append(cr);
+  }
+
+  const journal = document.createElement("div");
+  journal.className = "journal" + (ouvertes.has(tache.id) ? " ouvert" : "");
+  for (const pas of tache.journal) {
+    journal.append(rendrePas(pas));
+  }
+  carte.append(journal);
+
+  const actions = document.createElement("div");
+  actions.className = "actions";
+
+  const boutonJournal = document.createElement("button");
+  boutonJournal.textContent = ouvertes.has(tache.id) ? "Masquer le journal" : "Voir le journal";
+  boutonJournal.onclick = () => {
+    if (ouvertes.has(tache.id)) {
+      ouvertes.delete(tache.id);
+    } else {
+      ouvertes.add(tache.id);
+    }
+    rafraichir();
+  };
+  actions.append(boutonJournal);
+
+  if (tache.statut === "en_cours") {
+    const boutonAnnuler = document.createElement("button");
+    boutonAnnuler.className = "danger";
+    boutonAnnuler.textContent = "Annuler";
+    boutonAnnuler.onclick = async () => {
+      await fetch(`/taches/${tache.id}/annulation`, {method: "POST"});
+      rafraichir();
+    };
+    actions.append(boutonAnnuler);
+
+    suivreEnDirect(tache.id, journal);
+  }
+
+  carte.append(actions);
+  return carte;
+}
+
+function suivreEnDirect(tacheId, journalEl) {
+  if (flux.has(tacheId)) return;
+  const source = new EventSource(`/taches/${tacheId}/flux`);
+  source.onmessage = (evenement) => {
+    const donnees = JSON.parse(evenement.data);
+    if (donnees.type === "action") {
+      journalEl.append(rendrePas({code: donnees.code, resultat: donnees.resultat}));
+      journalEl.scrollTop = journalEl.scrollHeight;
+    } else if (donnees.type === "terminee" || donnees.type === "echouee") {
+      source.close();
+      flux.delete(tacheId);
+      rafraichir();
+    }
+  };
+  source.onerror = () => {
+    source.close();
+    flux.delete(tacheId);
+  };
+  flux.set(tacheId, source);
+}
+
+async function rafraichir() {
+  const reponse = await fetch("/taches");
+  const taches = await reponse.json();
+  liste.innerHTML = "";
+  if (taches.length === 0) {
+    const vide = document.createElement("div");
+    vide.className = "empty";
+    vide.textContent = "Aucune tâche pour l'instant.";
+    liste.append(vide);
+    return;
+  }
+  for (const tache of taches.slice().reverse()) {
+    liste.append(rendreTache(tache));
+  }
+}
+
+rafraichir();
+setInterval(rafraichir, 4000);
+</script>
+</body>
+</html>

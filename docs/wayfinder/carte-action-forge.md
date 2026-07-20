@@ -20,8 +20,8 @@ Cadrage acté au grilling du 2026-07-18 (recherche SOTA OpenHands /
 microsandbox / CodeAct versée le même jour) : **forge maison** (`action-forge`,
 pattern memory-forge — pas d'OpenHands embarqué) ; sandbox **Docker jetable
 d'abord**, la micro-VM (microsandbox/libkrun) ne se qualifie qu'au palier 3 ;
-cerveau : le LLM local (Qwen3.6-35B-A3B via llama.cpp OpenAI-compat), à
-qualifier avant d'engager la boucle.
+cerveau : le LLM local (Qwen3.6-35B-A3B via llama.cpp OpenAI-compat) — qualifié
+pour la boucle courte du ticket 0032 (2026-07-20).
 
 ## Notes
 
@@ -60,6 +60,45 @@ qualifier avant d'engager la boucle.
   (`/taches`, `/taches/{id}/flux`) + 3 outils MCP (`confier_tache`,
   `etat_tache`, `annuler_tache`), UI `/atelier`, Tâches en mémoire au
   palier 1. Les tickets 0033-0035 s'ouvrent dessus sans re-discuter.
+- [Le cerveau tient-il la boucle ?](tickets/0032-le-cerveau-tient-il-la-boucle.md) —
+  **verdict positif le 2026-07-20** :
+  [note](notes/verdict-boucle-codeact-qwen3.6.md) — Qwen3.6-35B-A3B tient la
+  boucle courte du palier 1 sur 5 tâches types, dans les deux modes (natif et
+  CodeAct, 5/5 chacun) ; CodeAct converge en moins de pas mais la mesure est
+  optimiste (outils simulés sans latence) ; Plan B dimensionné, non engagé.
+  Débloque le ticket 0033.
+- [L'Atelier : la sandbox Docker jetable](tickets/0033-l-atelier-sandbox-jetable.md) —
+  **livré le 2026-07-20** : `action-forge/` (port 8800), port ABC `Atelier`
+  (`demarrer`/`executer`/`detruire`), `AtelierFactice` pour les tests,
+  `AtelierDocker` (conteneurs frères via le socket, jamais monté dans
+  l'Atelier ; sans réseau par défaut ; bornes CPU/RAM/temps) — smoke test réel
+  passé (lancement, exécution, destruction, zéro orphelin). Image de l'Atelier
+  construite en compose (profil `images`). Débloque le ticket 0034.
+- [La boucle CodeAct et la première Tâche au réel](tickets/0034-boucle-codeact-premiere-tache-reelle.md) —
+  **livré le 2026-07-20** : `BoucleCodeAct` (prompt système français, bloc
+  bash = Action / `TERMINÉ:` = clôture, budget de pas borné, échec propre),
+  port `MoteurLLM` (`MoteurLLMFactice`, `MoteurLLMOpenAI` — llama.cpp,
+  **validé en réel**), Tâches en mémoire (`GestionnaireTaches`, une Tâche =
+  une tâche asyncio + son Atelier), REST asynchrone complet (`POST /taches`,
+  `GET /taches[/{id}]`, `POST /taches/{id}/annulation`,
+  `GET /taches/{id}/flux` SSE) et nettoyage des Ateliers orphelins au
+  démarrage. `/mcp` et l'UI `/atelier` reportés au 0035. **Prototype HITL
+  réel 3/3** : créer/relire un fichier, convertir une température (100 °F →
+  37,8 °C exact), créer un CSV et calculer une moyenne (13,5 exact) — un seul
+  pas par Tâche, comptes rendus français corrects, zéro conteneur orphelin.
+  Débloque le ticket 0035.
+- [L'action à la voix](tickets/0035-l-action-a-la-voix.md) —
+  **validé au réel le 2026-07-20, palier 1 atteint** : trois outils MCP
+  (`confier_tache` qui rend la main tout de suite, `ou_en_est_la_tache` et
+  `annuler_tache` visant par défaut la Tâche en cours la plus récente — on ne
+  prononce pas un identifiant à voix haute), annonce de fin par le Pont hôte
+  (port `Annonceur`, précédent du minuteur time-forge ; jamais d'annonce sur
+  une annulation), UI `/atelier` avec journal en direct. Une Tâche énoncée à
+  la voix aboutit, la conversation continue pendant, la fin s'annonce.
+  Deux échecs silencieux débusqués à la validation et consignés en impasses :
+  le Dialogue Forge meurt en boucle si **une** forge MCP est en retard (aucune
+  tolérance à l'échec au chargement du catalogue), et un backend non déclaré
+  au compose dégrade en factice sans lever d'erreur.
 
 ## Pas encore spécifié
 

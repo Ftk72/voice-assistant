@@ -62,7 +62,7 @@ docs, commits.
 - Une refonte ? **Big bang pour ce qu'on abandonne, progressif pour ce qu'on
   conserve.**
 
-## Conventions des forges (dialogue-forge, voice-forge, memory-forge, world-forge, time-forge, host-bridge)
+## Conventions des forges (dialogue-forge, voice-forge, memory-forge, world-forge, time-forge, action-forge, host-bridge)
 
 - Python 3.12, uv ; `uv sync` puis `uv run pytest` et `uv run ruff check .`
   dans chaque composant — tout doit rester vert.
@@ -112,8 +112,8 @@ docs, commits.
   - Prérequis WSL : la stack Docker doit tourner (STT 8002, TTS 8100, DF 8600).
 - Ports hôte (`docker-compose.yml`) : LLM 8001, STT 8002, embedder 8003,
   voice-forge 8100, memory 8200, world 8300, time 8400, dialogue **8600**,
-  searxng 8080, Neo4j 7474/7687 — plus **transport-voix 8700**, natif Windows
-  (hors compose).
+  action **8800**, searxng 8080, Neo4j 7474/7687 — plus **transport-voix
+  8700**, natif Windows (hors compose).
 
 ### Matériel et système
 
@@ -142,3 +142,15 @@ interruption, et les mesures face aux références ci-dessus (ticket wayfinder
 0011). Adaptateurs réels jamais exécutés à ce jour : `SubprocessRunner`
 (host-bridge) et `_RealQwen3TTSEngine` (voice-forge) — ne pas les présenter
 comme fonctionnels.
+
+**L'assistant agit** depuis le 2026-07-20 : le palier 1 de l'action-forge est
+atteint (ticket wayfinder 0035) — une Tâche énoncée à la voix part dans un
+Atelier Docker jetable, la conversation continue pendant, et le compte rendu
+s'annonce sur les enceintes par le Pont hôte, comme l'échéance d'un minuteur.
+Deux fragilités constatées à cette occasion (détail dans `docs/impasses.md`) :
+le Dialogue Forge **meurt en boucle de redémarrage si une seule forge MCP est
+en retard** (catalogue d'outils chargé au démarrage, sans tolérance à
+l'échec), et un backend non déclaré au compose **dégrade en factice sans lever
+d'erreur** — après tout ajout de service, comparer
+`docker compose exec -T <service> env | grep <PREFIXE>` aux `Settings` du
+composant.
