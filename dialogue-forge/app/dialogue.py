@@ -14,9 +14,20 @@ Les faits mémoire, quand il y en a, sont injectés en aval sous forme d'un
 message `user` de contexte, inséré juste avant le message utilisateur du
 tour et **persisté** dans l'historique — c'est ce message qui varie, jamais
 le système.
+
+Garde-fou d'écho (ticket 0044) : une annonce spontanée (fin de Tâche,
+échéance de minuteur) peut tomber pendant une conversation micro vif, être
+captée par le micro et transcrite par le STT comme si l'utilisateur avait
+parlé. `clore_conversation` écarte alors ce tour fantôme via `_est_echo`.
+C'est un **filet de sécurité de dernier recours**, purement textuel et local
+à cette fonction — il ne remplace pas le correctif structurel (le canal de
+l'annonce, traité côté transport/pont hôte, cf. ticket 0044) : il ne fait que
+limiter les dégâts sur la mémoire si ce correctif est absent ou insuffisant.
 """
 
+import difflib
 import json
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -52,6 +63,47 @@ BACKCHANNELS = frozenset(
 def _est_backchannel(texte: str) -> bool:
     normalise = texte.strip().lower().rstrip(" .!?…,")
     return normalise in BACKCHANNELS
+
+
+# Similarité (SequenceMatcher, ratio 0-1) au-delà de laquelle un tour
+# utilisateur est considéré comme un écho du tour assistant qui le précède.
+# 0.8 tolère les pertes usuelles d'un STT (casse, ponctuation, une élision ou
+# deux) tout en laissant passer une reformulation qui ne réemploie que
+# quelques mots de l'assistant (cf. tests/test_garde_fou_echo.py) : un humain
+# qui reformule change la structure de la phrase, un micro qui réentend les
+# enceintes la restitue quasi telle quelle.
+SEUIL_ECHO = 0.8
+
+# Plancher de longueur (caractères, texte normalisé) en dessous duquel on ne
+# tente même pas la comparaison : sur un texte très court, quelques
+# caractères communs suffisent à gonfler artificiellement le ratio de
+# SequenceMatcher (ex. « oui » vs un tour assistant qui contient « oui »
+# ailleurs). Ces tours très courts sont de toute façon déjà couverts par le
+# filtre des backchannels ; ce n'est pas au garde-fou d'écho de les juger.
+PLANCHER_LONGUEUR_ECHO = 8
+
+
+def _normaliser_pour_comparaison(texte: str) -> str:
+    """Minuscules, ponctuation retirée, espaces multiples réduits — le STT ne
+    restitue ni la casse ni la ponctuation de ce que dit la synthèse."""
+    sans_ponctuation = re.sub(r"[^\w\s]", " ", texte.lower())
+    return re.sub(r"\s+", " ", sans_ponctuation).strip()
+
+
+def _est_echo(texte_utilisateur: str, texte_assistant: str) -> bool:
+    """Un tour `user` qui reprend, en substance, le tour `assistant` qui le
+    précède immédiatement est un écho (micro qui réentend les enceintes) et
+    non une parole de l'utilisateur — cf. docstring de module."""
+    if not texte_assistant:
+        # Un texte assistant vide ne peut être la source d'aucun écho.
+        return False
+    normalise_utilisateur = _normaliser_pour_comparaison(texte_utilisateur)
+    normalise_assistant = _normaliser_pour_comparaison(texte_assistant)
+    if len(normalise_utilisateur) < PLANCHER_LONGUEUR_ECHO:
+        return False
+    ratio = difflib.SequenceMatcher(None, normalise_utilisateur, normalise_assistant).ratio()
+    return ratio >= SEUIL_ECHO
+
 
 # Bloc de consignes sur l'usage des outils, ajouté au prompt du persona.
 # Constant d'un tour à l'autre et d'un persona à l'autre : toute variation
@@ -113,6 +165,17 @@ class Orchestrateur:
         None = voix du persona ; sinon la voix dérogée est portée par chaque
         phrase du flux, à charge du transport de l'appliquer au TTS."""
         voix_du_tour = voix or persona.voix
+
+        # (0) Reprise à chaud (ticket 0043) : retente les forges d'outils
+        # tombées, au plus une fois par palier (cf. `OutilsMCP.rafraichir`).
+        # `None` = rien n'a changé, on ne touche à rien ; ce n'est que quand une
+        # forge revient réellement que le catalogue — donc le préfixe du prompt
+        # système — bouge, ce qui est le seul moment où invalider le cache de
+        # contexte du LLM est justifié.
+        catalogue_rafraichi = await self._outils.rafraichir()
+        if catalogue_rafraichi is not None:
+            self._outils_definitions = catalogue_rafraichi
+
         # (a) Injection : faits pertinents à partir du texte utilisateur.
         faits = await self._memoire.rechercher(texte_utilisateur)
         message_contexte = self._construire_message_contexte(faits)
@@ -213,21 +276,32 @@ class Orchestrateur:
     ) -> bool:
         """Fin de conversation : capture un unique épisode à partir des tours de
         l'**utilisateur** (l'assistant ne fait pas foi — ADR 0011). Écarte le
-        message de contexte mémoire (rôle `user` mais injecté par nous) et les
-        backchannels. Ne capture rien pour un persona off-record ou une
-        conversation sans contenu utile. `nom` identifie l'épisode par la
-        conversation (datée), non par le persona. Renvoie True si un épisode a
-        été confié à la mémoire."""
+        message de contexte mémoire (rôle `user` mais injecté par nous), les
+        backchannels, et — garde-fou de dernier recours, cf. docstring de
+        module — tout tour `user` qui n'est que l'écho du tour `assistant`
+        immédiatement précédent (annonce spontanée captée par le micro et
+        transcrite par erreur comme une parole de l'utilisateur). Ne capture
+        rien pour un persona off-record ou une conversation sans contenu
+        utile. `nom` identifie l'épisode par la conversation (datée), non par
+        le persona. Renvoie True si un épisode a été confié à la mémoire."""
         if off_record:
             return False
-        tours = [
-            m["content"]
-            for m in historique
-            if m["role"] == "user"
-            and m["content"]
-            and not m["content"].startswith(PREFIXE_CONTEXTE_MEMOIRE)
-            and not _est_backchannel(m["content"])
-        ]
+        tours: list[str] = []
+        dernier_assistant = ""
+        for message in historique:
+            if message["role"] == "assistant":
+                dernier_assistant = message["content"] or ""
+                continue
+            if message["role"] != "user" or not message["content"]:
+                continue
+            contenu = message["content"]
+            if contenu.startswith(PREFIXE_CONTEXTE_MEMOIRE):
+                continue
+            if _est_backchannel(contenu):
+                continue
+            if _est_echo(contenu, dernier_assistant):
+                continue
+            tours.append(contenu)
         if not tours:
             return False
         contenu = "\n".join(f"Utilisateur : {tour}" for tour in tours)

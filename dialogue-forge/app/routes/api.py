@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -20,8 +21,18 @@ router = APIRouter()
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health(request: Request) -> dict[str, Any]:
+    """Point d'audit minimal, enrichi (ticket 0043) de l'état des forges
+    d'outils quand le moteur en cours l'expose (`etat_forges`, porté par
+    `OutilsMCP` seul — le factice ne l'a pas). Avec le factice, la réponse
+    reste exactement `{"status": "ok"}` : c'est le comportement de tous les
+    tests existants et il ne change pas."""
+    reponse: dict[str, Any] = {"status": "ok"}
+    outils = request.app.state.outils
+    etat_forges = getattr(outils, "etat_forges", None)
+    if etat_forges is not None:
+        reponse["forges_outils"] = etat_forges()
+    return reponse
 
 
 @router.get("/personas", response_model=list[PersonaRef])

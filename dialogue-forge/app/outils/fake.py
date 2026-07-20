@@ -21,6 +21,11 @@ class OutilsFactices(MoteurOutils):
     resultats: dict[str, Resultat] = field(default_factory=dict)
     appels: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     appels_lister_outils: int = 0
+    # File programmable des réponses successives de `rafraichir` : chaque appel
+    # dépile la tête de liste (None = « rien n'a changé »). Épuisée, `rafraichir`
+    # renvoie None. Permet aux tests de simuler une reprise sans réseau.
+    rafraichissements: list[list[DefinitionOutil] | None] = field(default_factory=list)
+    appels_rafraichir: int = 0
 
     async def lister_outils(self) -> list[DefinitionOutil]:
         self.appels_lister_outils += 1
@@ -30,3 +35,9 @@ class OutilsFactices(MoteurOutils):
         self.appels.append((nom, arguments))
         resultat = self.resultats.get(nom, "")
         return resultat(arguments) if callable(resultat) else str(resultat)
+
+    async def rafraichir(self) -> list[DefinitionOutil] | None:
+        self.appels_rafraichir += 1
+        if not self.rafraichissements:
+            return None
+        return self.rafraichissements.pop(0)

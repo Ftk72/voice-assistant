@@ -50,7 +50,7 @@ def build_outils(settings: Settings) -> MoteurOutils:
     if settings.outils_backend == "mcp":
         from app.outils.mcp import OutilsMCP
 
-        return OutilsMCP(settings.mcp_urls)
+        return OutilsMCP(settings.mcp_urls, settings.mcp_palier_reprise_s)
     return OutilsFactices()
 
 

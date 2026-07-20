@@ -30,8 +30,14 @@ class Settings(BaseSettings):
             "http://127.0.0.1:8400/mcp",  # time-forge
             "http://127.0.0.1:8300/mcp",  # world-forge
             "http://127.0.0.1:8200/mcp",  # memory-forge
+            "http://127.0.0.1:8800/mcp",  # action-forge
         ]
     )
+    # Palier de reprise (ticket 0043) : une forge tombée n'est retentée qu'au
+    # plus une fois par intervalle, au début d'un tour de conversation. Trop
+    # court coûte une connexion HTTP par tour pour rien ; trop long laisse une
+    # forge réparée invisible plus longtemps que nécessaire.
+    mcp_palier_reprise_s: float = 60.0
 
     # Personas et boucle d'outils.
     personas_dir: Path = PERSONAS_PAR_DEFAUT
